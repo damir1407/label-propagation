@@ -19,6 +19,10 @@ class LabelPropagation:
         for node in self.G.nodes():
             self.val_map[node] = random.choice(groups)
 
+    def __call__(self, c, t):
+        # write options depending on "c" and "t"
+        self.run()
+
     def draw(self):
         values = [self.val_map.get(node) for node in self.G.nodes()]
         plt.subplot(111)
@@ -31,7 +35,6 @@ class LabelPropagation:
             change = False
             self.draw()
             for node in self.G.nodes():
-                print(node)
                 labels = [self.val_map[adj] for adj in self.G[node].keys()]
                 newLabel = max(Counter(labels).items(), key=operator.itemgetter(1))[0]
                 if self.val_map[node] != newLabel:
@@ -39,5 +42,5 @@ class LabelPropagation:
                     change = True
 
 lp = LabelPropagation()
-lp.run()
+lp(1,1)
 lp.draw()
