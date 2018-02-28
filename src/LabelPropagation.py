@@ -1,18 +1,11 @@
-import networkx as nx
-import matplotlib.pyplot as plt
-import random
-import operator
+import networkx as nx, matplotlib.pyplot as plt, random, operator, csv
 from collections import Counter
 
 
 class LabelPropagation:
-    def __init__(self):
+    def __init__(self, file_path):
         self.G = nx.Graph()
-        self.G.add_edges_from(
-            [('A', 'B'), ('A', 'C'), ('A', 'D'), ('B', 'C'), ('B', 'D'), ('C', 'D'),
-             ('B', 'E'), ('B', 'F'), ('E', 'F'), ('F', 'G'), ('E', 'I'), ('I', 'J'),
-             ('G', 'J'), ('E', 'G'), ('E', 'J'), ('F', 'I'), ('F', 'J'), ('I', 'G'),
-             ('C', 'H'), ('H', 'K'), ('H', 'L'), ('K', 'L'), ('K', 'J')])
+        self.G.add_edges_from(read_file(file_path))
 
         groups = [1.0, 0.75, 0.5, 0.0]
         self.val_map = {}
@@ -41,6 +34,13 @@ class LabelPropagation:
                     self.val_map[node] = newLabel
                     change = True
 
-lp = LabelPropagation()
+def read_file(file_path):
+    f = open(file_path, "rt")
+    data = []
+    for line in csv.reader(f, delimiter=" "):
+        data.append((line[0], line[1]))
+    return data
+
+lp = LabelPropagation("../input/inputFile")
 lp(1,1)
 lp.draw()
