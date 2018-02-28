@@ -3,14 +3,13 @@ from collections import Counter
 
 
 class LabelPropagation:
-    def __init__(self, file_path):
+    def __init__(self, file_path, noOfGroups):
         self.G = nx.Graph()
         self.G.add_edges_from(read_file(file_path))
 
-        groups = [1.0, 0.75, 0.5, 0.0]
         self.val_map = {}
         for node in self.G.nodes():
-            self.val_map[node] = random.choice(groups)
+            self.val_map[node] = random.choice(range(1,noOfGroups+1))
 
     def __call__(self, c, t):
         # write options depending on "c" and "t"
@@ -41,6 +40,6 @@ def read_file(file_path):
         data.append((line[0], line[1]))
     return data
 
-lp = LabelPropagation("../input/inputFile")
+lp = LabelPropagation("../input/inputFile", 4)
 lp(1,1)
 lp.draw()
