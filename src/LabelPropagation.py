@@ -39,12 +39,13 @@ class LabelPropagation:
                     change = True
 
 def read_file(file_path):
-    f = open(file_path, "rt")
-    data = []
-    for line in csv.reader(f, delimiter=" "):
-        data.append((line[0], line[1]))
-    return data
+    with open(file_path, "rt") as f:
+        data = []
+        for line in f:
+            line = line.split()
+            data.append((line[0], line[1]))
+        return data
 
 lp = LabelPropagation("../input/inputFile", "random", 4)
-lp(1,1)
+lp(0,0)
 lp.draw()
