@@ -9,13 +9,16 @@ class LabelPropagation:
         self.val_map = {}
         self.finalGroups = []
 
-    def __call__(self, noOfGroups, c, t, draw=False):
+    def __call__(self, noOfGroups, c, t):
         # write options depending on "c" and "t"
+        self.initializeLabels(noOfGroups)
+        self.run(True)
+
         for i in range(100):
             self.initializeLabels(noOfGroups)
-            self.run(draw)
+            self.run(False)
             self.finalGroups.append(self.getUniqueGroups())
-        print(self.getAverageNumberOfGroups())
+        print("Average number of groups in 100 iterations:", self.getAverageNumberOfGroups())
 
     def getUniqueGroups(self):
         return Counter(self.val_map.values()).__len__()
