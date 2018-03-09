@@ -7,29 +7,39 @@ class LabelPropagation:
         self.G = nx.Graph()
         self.G.add_edges_from(read_file(file_path))
         self.val_map = {}
-        self.finalGroups = []
+        self.final_groups = []
 
-    def __call__(self, noOfGroups, c, t):
+    def __call__(self, no_of_groups, c, t):
         # write options depending on "c" and "t"
-        self.initializeLabels(noOfGroups)
+        """"
+        self.val_map['A'] = 0
+        self.val_map['B'] = 1
+        self.val_map['C'] = 0
+        self.val_map['D'] = 1
+        self.val_map['E'] = 0
+        self.val_map['F'] = 1
+        self.val_map['G'] = 1
+        self.val_map['H'] = 1
+        """
+        self.initialize_labels(no_of_groups)
         self.run(True)
 
         for i in range(100):
-            self.initializeLabels(noOfGroups)
+            self.initialize_labels(no_of_groups)
             self.run(False)
-            self.finalGroups.append(self.getUniqueGroups())
-        print("Average number of groups in 100 iterations:", self.getAverageNumberOfGroups())
+            self.final_groups.append(self.get_unique_groups())
+        print("Average number of groups in 100 iterations:", self.get_average_number_of_groups())
 
-    def getUniqueGroups(self):
+    def get_unique_groups(self):
         return Counter(self.val_map.values()).__len__()
 
-    def getAverageNumberOfGroups(self):
-        return sum(self.finalGroups) / len(self.finalGroups)
+    def get_average_number_of_groups(self):
+        return sum(self.final_groups) / len(self.final_groups)
 
-    def initializeLabels(self, noOfGroups):
+    def initialize_labels(self, no_of_groups):
         for i, node in enumerate(self.G.nodes()):
-            if noOfGroups > 0:
-                self.val_map[node] = random.choice(range(1, noOfGroups + 1))
+            if no_of_groups > 0:
+                self.val_map[node] = random.choice(range(1, no_of_groups + 1))
             else:
                 self.val_map[node] = i+1
 
@@ -45,11 +55,11 @@ class LabelPropagation:
             change = False
             if draw:
                 self.draw()
-            for node in self.G.nodes():
+            for node in sorted(self.G.nodes()):
                 labels = [self.val_map[adj] for adj in self.G[node].keys()]
-                newLabel = max(Counter(labels).items(), key=operator.itemgetter(1))[0]
-                if self.val_map[node] != newLabel:
-                    self.val_map[node] = newLabel
+                new_label = max(Counter(labels).items(), key=operator.itemgetter(1))[0]
+                if self.val_map[node] != new_label:
+                    self.val_map[node] = new_label
                     change = True
         if draw:
             self.draw()
@@ -61,6 +71,7 @@ def read_file(file_path):
             line = line.split()
             data.append((line[0], line[1]))
         return data
+
 
 lp = LabelPropagation("../input/inputFile")
 lp(4, 0, 0)
