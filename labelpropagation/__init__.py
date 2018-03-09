@@ -1,0 +1,1 @@
+from labelpropagation.label_propagation import LabelPropagation

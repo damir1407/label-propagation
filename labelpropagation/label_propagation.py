@@ -71,7 +71,3 @@ def read_file(file_path):
             line = line.split()
             data.append((line[0], line[1]))
         return data
-
-
-lp = LabelPropagation("../input/inputFile")
-lp(4, 0, 0)
