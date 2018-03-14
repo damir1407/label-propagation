@@ -1,5 +1,5 @@
 from labelpropagation import LabelPropagation
 
 lp = LabelPropagation("input/inputFile")
-lp.run()
-lp.run100()
+lp.run("random")
+lp.run100("random")
