@@ -48,13 +48,25 @@ class LabelPropagation:
 
     def _initialize_labels(self):
         for i, node in enumerate(self._G.nodes()):
-            self._label_map[node] = i+1
+            self._label_map[node] = i
 
     def _draw(self):
-        values = [self._label_map.get(node) for node in self._G.nodes()]
+        colors = [self._label_map.get(node) for node in self._G.nodes()]
         plt.subplot(111)
-        nx.draw(self._G, with_labels=self._G.nodes, node_color=values)
+        nx.draw(self._G, with_labels=self._G.nodes, node_color=colors)
         plt.show()
+
+    def _find_max_label(self, node, label_ties_resolution):
+        labels = [self._label_map[adj] for adj in self._G[node].keys()]
+        label_count = list(Counter(labels).values())
+        if all(label_count[0] == label_cnt for label_cnt in label_count):
+            if label_ties_resolution == "random":
+                return random.choice(labels)
+            elif label_ties_resolution == "leung":
+                labels.append(self._label_map[node])
+            elif label_ties_resolution == "barberclark":
+                return self._label_map[node]
+        return max(Counter(labels).items(), key=operator.itemgetter(1))[0]
 
     def _algorithm(self, draw, label_ties_resolution):
         if draw:
@@ -63,25 +75,13 @@ class LabelPropagation:
         while change:
             change = False
             for node in sorted(self._G.nodes()):
-                new_label = find_max_label(node, self._label_map, self._G, label_ties_resolution)
+                new_label = self._find_max_label(node, label_ties_resolution)
                 if self._label_map[node] != new_label:
                     self._label_map[node] = new_label
                     change = True
         if draw:
             self._draw()
 
-
-def find_max_label(node, label_map, G, label_ties_resolution):
-    labels = [label_map[adj] for adj in G[node].keys()]
-    label_count = list(Counter(labels).values())
-    if all(label_count[0] == label_cnt for label_cnt in label_count):
-        if label_ties_resolution == "random":
-            return random.choice(labels)
-        elif label_ties_resolution == "leung":
-            labels.append(label_map[node])
-        elif label_ties_resolution == "barberclark":
-            return label_map[node]
-    return max(Counter(labels).items(), key=operator.itemgetter(1))[0]
 
 def read_file(file_path):
     with open(file_path, "rt") as f:
