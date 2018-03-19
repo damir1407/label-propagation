@@ -5,7 +5,8 @@ from collections import Counter
 class LabelPropagation:
     def __init__(self, file_path):
         self._G = nx.Graph()
-        self._G.add_edges_from(read_file(file_path))
+        edges = read_file(file_path)
+        self._G.add_edges_from(edges)
         self._label_map = {}
         self._final_groups = []
 
@@ -18,7 +19,9 @@ class LabelPropagation:
         More details about "label_ties_resolution_string" can be found in the README file.
         """
         self._initialize_labels()
-        self._algorithm(True, label_ties_resolution)
+        self._draw()
+        self._algorithm(label_ties_resolution)
+        self._draw()
 
     def run100(self, label_ties_resolution):
         """
@@ -30,15 +33,15 @@ class LabelPropagation:
         """
         for i in range(100):
             self._initialize_labels()
-            self._algorithm(False, label_ties_resolution)
+            self._algorithm(label_ties_resolution)
             self._final_groups.append(self._get_unique_groups())
         self._print_results_of_run100()
 
     def _print_results_of_run100(self):
-        print("Average number of communities found in 100 iterations: %s" % self._get_average_number_of_groups())
+        print("Average number of communities found in 100 attempts: %s" % self._get_average_number_of_groups())
         counted = Counter(self._final_groups)
         for key in counted.keys():
-            print("In %d iterations number of communities found was %d" % (counted[key], key))
+            print("In %d attempts number of communities found was %d" % (counted[key], key))
 
     def _get_unique_groups(self):
         return Counter(self._label_map.values()).__len__()
@@ -68,9 +71,7 @@ class LabelPropagation:
                 return self._label_map[node]
         return max(Counter(labels).items(), key=operator.itemgetter(1))[0]
 
-    def _algorithm(self, draw, label_ties_resolution):
-        if draw:
-            self._draw()
+    def _algorithm(self, label_ties_resolution):
         change = True
         while change:
             change = False
@@ -79,14 +80,12 @@ class LabelPropagation:
                 if self._label_map[node] != new_label:
                     self._label_map[node] = new_label
                     change = True
-        if draw:
-            self._draw()
 
 
 def read_file(file_path):
     with open(file_path, "rt") as f:
-        data = []
+        edges = []
         for line in f:
             line = line.split()
-            data.append((line[0], line[1]))
-        return data
+            edges.append((line[0], line[1]))
+        return edges
