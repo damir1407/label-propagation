@@ -55,7 +55,6 @@ class LabelPropagation:
 
     def _draw(self):
         colors = [self._label_map.get(node) for node in self._G.nodes()]
-        plt.subplot(111)
         nx.draw(self._G, with_labels=self._G.nodes, node_color=colors)
         plt.show()
 
