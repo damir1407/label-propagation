@@ -87,5 +87,8 @@ def read_file(file_path):
         edges = []
         for line in f:
             line = line.split()
-            edges.append((line[0], line[1]))
+            if line[0].isalnum():
+                edges.append((line[0], line[1]))
+            else:
+                continue
         return edges
