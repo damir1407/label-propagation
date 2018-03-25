@@ -23,22 +23,22 @@ class LabelPropagation:
         self._algorithm(label_ties_resolution)
         self._draw()
 
-    def run100(self, label_ties_resolution):
+    def evaluate(self, label_ties_resolution, k):
         """
-        Runs the algorithm hundred times, and prints the average number of communities found.
+        Runs the algorithm k times, and prints the average number of communities found.
         Usage:
             lp = LabelPropagation("path/to/input/file")
             lp.run100("label_ties_resolution_string")
         More details about "label_ties_resolution_string" can be found in the README file.
         """
-        for i in range(100):
+        for i in range(k):
             self._initialize_labels()
             self._algorithm(label_ties_resolution)
             self._final_groups.append(self._get_unique_groups())
-        self._print_results_of_run100()
+        self._print_results_of_evaluate(k)
 
-    def _print_results_of_run100(self):
-        print("Average number of communities found in 100 attempts: %s" % self._get_average_number_of_groups())
+    def _print_results_of_evaluate(self, k):
+        print("Average number of communities found in %d attempts: %s" % (k, self._get_average_number_of_groups()))
         counted = Counter(self._final_groups)
         for key in counted.keys():
             print("In %d attempts number of communities found was %d" % (counted[key], key))
