@@ -1,4 +1,4 @@
-import networkx as nx, matplotlib.pyplot as plt, random, operator
+import networkx as nx, matplotlib.pyplot as plt, random, operator, time
 from collections import Counter
 
 
@@ -9,8 +9,9 @@ class LabelPropagation:
         self._G.add_edges_from(edges)
         self._label_map = {}
         self._final_groups = []
+        self._runtime = 0
 
-    def run(self, label_ties_resolution):
+    def run(self, label_ties_resolution, draw=False):
         """
         Runs the algorithm once, and presents a drawing of the result.
         Usage:
@@ -19,9 +20,14 @@ class LabelPropagation:
         More details about "label_ties_resolution_string" can be found in the README file.
         """
         self._initialize_labels()
-        self._draw()
+        if draw:
+            self._draw_graph()
+        start_time = time.clock()
         self._algorithm(label_ties_resolution)
-        self._draw()
+        self._runtime = time.clock() - start_time
+        if draw:
+            self._draw_graph()
+        self._print_results_of_run()
 
     def evaluate(self, label_ties_resolution, k):
         """
@@ -37,7 +43,13 @@ class LabelPropagation:
             self._final_groups.append(self._get_unique_groups())
         self._print_results_of_evaluate(k)
 
+    def _print_results_of_run(self):
+        print("-Run method-")
+        print("Number of communities found: %s" % self._get_unique_groups())
+        print("Time elapsed: %f seconds" % self._runtime)
+
     def _print_results_of_evaluate(self, k):
+        print("-Evaluate method-")
         print("Average number of communities found in %d attempts: %s" % (k, self._get_average_number_of_groups()))
         counted = Counter(self._final_groups)
         for key in counted.keys():
@@ -53,7 +65,7 @@ class LabelPropagation:
         for i, node in enumerate(self._G.nodes()):
             self._label_map[node] = i
 
-    def _draw(self):
+    def _draw_graph(self):
         colors = [self._label_map.get(node) for node in self._G.nodes()]
         nx.draw(self._G, with_labels=self._G.nodes, node_color=colors)
         plt.show()
