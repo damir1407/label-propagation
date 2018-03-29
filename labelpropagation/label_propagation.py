@@ -8,8 +8,6 @@ class LabelPropagation:
         edges = read_file(file_path)
         self._G.add_edges_from(edges)
         self._label_map = {}
-        self._final_groups = []
-        self._runtime = 0
 
     def run(self, label_ties_resolution, draw=False):
         """
@@ -24,10 +22,10 @@ class LabelPropagation:
             self._draw_graph()
         start_time = time.clock()
         self._algorithm(label_ties_resolution)
-        self._runtime = time.clock() - start_time
+        runtime = time.clock() - start_time
         if draw:
             self._draw_graph()
-        self._print_results_of_run()
+        self._print_results_of_run(runtime)
 
     def evaluate(self, label_ties_resolution, k):
         """
@@ -37,29 +35,33 @@ class LabelPropagation:
             lp.run100("label_ties_resolution_string")
         More details about "label_ties_resolution_string" can be found in the README file.
         """
+        final_number_of_groups = []
+        runtimes = []
         for i in range(k):
             self._initialize_labels()
+            start_time = time.clock()
             self._algorithm(label_ties_resolution)
-            self._final_groups.append(self._get_unique_groups())
-        self._print_results_of_evaluate(k)
+            runtimes.append(time.clock() - start_time)
+            final_number_of_groups.append(self._get_unique_groups())
+        self._print_results_of_evaluate(k, final_number_of_groups, runtimes)
 
-    def _print_results_of_run(self):
+    def _print_results_of_run(self, runtime):
         print("-Run method-")
         print("Number of communities found: %s" % self._get_unique_groups())
-        print("Time elapsed: %f seconds" % self._runtime)
+        print("Time elapsed: %f miliseconds" % (runtime * 1000))
+        print()
 
-    def _print_results_of_evaluate(self, k):
+    def _print_results_of_evaluate(self, k, final_number_of_groups, runtimes):
         print("-Evaluate method-")
-        print("Average number of communities found in %d attempts: %s" % (k, self._get_average_number_of_groups()))
-        counted = Counter(self._final_groups)
+        print("Average number of communities found in %d attempts: %s" % (k, sum(final_number_of_groups) / len(final_number_of_groups)))
+        print("Average time elapsed in %d attempts: %f miliseconds" % (k, float(sum(runtimes) / len(runtimes)) * 1000))
+        counted = Counter(final_number_of_groups)
         for key in counted.keys():
             print("In %d attempts number of communities found was %d" % (counted[key], key))
+        print()
 
     def _get_unique_groups(self):
         return Counter(self._label_map.values()).__len__()
-
-    def _get_average_number_of_groups(self):
-        return sum(self._final_groups) / len(self._final_groups)
 
     def _initialize_labels(self):
         for i, node in enumerate(self._G.nodes()):
@@ -67,6 +69,7 @@ class LabelPropagation:
 
     def _draw_graph(self):
         colors = [self._label_map.get(node) for node in self._G.nodes()]
+        plt.subplot(111)
         nx.draw(self._G, with_labels=self._G.nodes, node_color=colors)
         plt.show()
 
@@ -76,9 +79,9 @@ class LabelPropagation:
         if all(label_count[0] == label_cnt for label_cnt in label_count):
             if label_ties_resolution == "random":
                 return random.choice(labels)
-            elif label_ties_resolution == "leung":
+            elif label_ties_resolution == "inclusion":
                 labels.append(self._label_map[node])
-            elif label_ties_resolution == "barberclark":
+            elif label_ties_resolution == "retention":
                 return self._label_map[node]
         return max(Counter(labels).items(), key=operator.itemgetter(1))[0]
 
