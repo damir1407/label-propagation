@@ -10,7 +10,7 @@ class LabelPropagation:
         self._label_map = {}
         self._iterations = 0
 
-    def run(self, label_ties_resolution, label_equilibrium_criterium, draw=False):
+    def run(self, label_ties_resolution, label_equilibrium_criterium, draw=False, maximum_iterations=100):
         """
         Runs the algorithm once, and presents a drawing of the result.
         Usage:
@@ -22,13 +22,13 @@ class LabelPropagation:
         if draw:
             self._draw_graph()
         start_time = time.clock()
-        self._algorithm(label_ties_resolution, label_equilibrium_criterium)
+        self._algorithm(label_ties_resolution, label_equilibrium_criterium, maximum_iterations)
         runtime = time.clock() - start_time
         if draw:
             self._draw_graph()
         self._print_results_of_run(runtime)
 
-    def evaluate(self, label_ties_resolution, label_equilibrium_criterium, k):
+    def evaluate(self, label_ties_resolution, label_equilibrium_criterium, k, maximum_iterations=100):
         """
         Runs the algorithm k times, and prints the average number of communities found.
         Usage:
@@ -41,7 +41,7 @@ class LabelPropagation:
         for i in range(k):
             self._initialize_labels()
             start_time = time.clock()
-            self._algorithm(label_ties_resolution, label_equilibrium_criterium)
+            self._algorithm(label_ties_resolution, label_equilibrium_criterium, maximum_iterations)
             runtimes.append(time.clock() - start_time)
             final_number_of_groups.append(self._get_unique_groups())
         self._print_results_of_evaluate(k, final_number_of_groups, runtimes)
@@ -77,30 +77,40 @@ class LabelPropagation:
 
     def _find_max_label(self, node, label_ties_resolution):
         labels = [self._label_map[adj] for adj in self._G[node].keys()]
-        label_count = list(Counter(labels).values())
-        if all(label_count[0] == label_cnt for label_cnt in label_count):
+        if all_labels_maximal(labels):
             if label_ties_resolution == "random":
                 return random.choice(labels)
             elif label_ties_resolution == "inclusion":
                 labels.append(self._label_map[node])
             elif label_ties_resolution == "retention":
-                #TODO: Fix label retention
-                return self._label_map[node]
+                if self._label_map[node] in labels:
+                    return self._label_map[node]
+                else:
+                    return random.choice(labels)
         return max(Counter(labels).items(), key=operator.itemgetter(1))[0]
 
-    #TODO: Rename raghavan function
-    def _raghavan(self):
+    def _strong_community(self):
         for node in self._G.nodes():
             labels = [self._label_map[adj] for adj in self._G[node].keys()]
-            #TODO: Check if neighbouring labels are equal
-            #label_count = list(Counter(labels).values())
+            if all_labels_maximal(labels):
+                return True
             if self._label_map[node] != max(Counter(labels).items(), key=operator.itemgetter(1))[0]:
                 return True
         return False
 
-    def _algorithm(self, label_ties_resolution, label_equilibrium_criterium):
+    def _label_equilibrium(self):
+        for node in self._G.nodes():
+            labels = [self._label_map[adj] for adj in self._G[node].keys()]
+            if all_labels_maximal(labels):
+                continue
+            if self._label_map[node] != max(Counter(labels).items(), key=operator.itemgetter(1))[0]:
+                return True
+        return False
+
+    def _algorithm(self, label_ties_resolution, label_equilibrium_criterium, maximum_iterations):
         change = True
-        while change:
+        self._iterations = 0
+        while change and self._iterations < maximum_iterations:
             self._iterations = self._iterations + 1
             change = False
             for node in random.sample(self._G.nodes(), len(self._G.nodes())):
@@ -108,9 +118,20 @@ class LabelPropagation:
                 if self._label_map[node] != new_label:
                     self._label_map[node] = new_label
                     change = True
-            if label_equilibrium_criterium == "raghavan":
-                change = self._raghavan()
+            if label_equilibrium_criterium == "strong-community":
+                change = self._strong_community()
+            elif label_equilibrium_criterium == "label-equilibrium":
+                change = self._label_equilibrium()
 
+
+def all_labels_maximal(labels):
+    label_count = list(Counter(labels).values())
+    if len(label_count) == 1:
+        return False
+    for label_cnt in label_count:
+        if label_count[0] != label_cnt:
+            return False
+    return True
 
 def read_file(file_path):
     with open(file_path, "rt") as f:
