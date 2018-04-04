@@ -10,7 +10,7 @@ class LabelPropagation:
         self._label_map = {}
         self._iterations = 0
 
-    def run(self, label_ties_resolution, label_equilibrium_criterium, draw=False, maximum_iterations=100):
+    def run(self, label_ties_resolution, label_equilibrium_criterium, order_of_label_propagation, draw=False, maximum_iterations=100):
         """
         Runs the algorithm once, and presents a drawing of the result.
         Usage:
@@ -22,13 +22,13 @@ class LabelPropagation:
         if draw:
             self._draw_graph()
         start_time = time.clock()
-        self._algorithm(label_ties_resolution, label_equilibrium_criterium, maximum_iterations)
+        self._algorithm(label_ties_resolution, label_equilibrium_criterium, order_of_label_propagation, maximum_iterations)
         runtime = time.clock() - start_time
         if draw:
             self._draw_graph()
         self._print_results_of_run(runtime)
 
-    def evaluate(self, label_ties_resolution, label_equilibrium_criterium, k, maximum_iterations=100):
+    def evaluate(self, label_ties_resolution, label_equilibrium_criterium, order_of_label_propagation, k, maximum_iterations=100):
         """
         Runs the algorithm k times, and prints the average number of communities found.
         Usage:
@@ -41,7 +41,7 @@ class LabelPropagation:
         for i in range(k):
             self._initialize_labels()
             start_time = time.clock()
-            self._algorithm(label_ties_resolution, label_equilibrium_criterium, maximum_iterations)
+            self._algorithm(label_ties_resolution, label_equilibrium_criterium, order_of_label_propagation, maximum_iterations)
             runtimes.append(time.clock() - start_time)
             final_number_of_groups.append(self._get_unique_groups())
         self._print_results_of_evaluate(k, final_number_of_groups, runtimes)
@@ -75,6 +75,7 @@ class LabelPropagation:
         nx.draw(self._G, with_labels=self._G.nodes, node_color=colors)
         plt.show()
 
+    #TODO Rename find max label function
     def _find_max_label(self, node, label_ties_resolution):
         labels = [self._label_map[adj] for adj in self._G[node].keys()]
         if all_labels_maximal(labels):
@@ -107,13 +108,24 @@ class LabelPropagation:
                 return True
         return False
 
-    def _algorithm(self, label_ties_resolution, label_equilibrium_criterium, maximum_iterations):
+    def _iteration_order(self, order):
+        if order == "synchronous":
+            return self._G.nodes()
+        elif order == "asynchronous":
+            return random.sample(self._G.nodes(), len(self._G.nodes()))
+        else:
+            #TODO Investigate clever custom error handling ways
+            pass
+
+    def _algorithm(self, label_ties_resolution, label_equilibrium_criterium,
+                   order_of_label_propagation, maximum_iterations):
         change = True
+        #TODO: Think about nicer way to count iterations
         self._iterations = 0
         while change and self._iterations < maximum_iterations:
             self._iterations = self._iterations + 1
             change = False
-            for node in random.sample(self._G.nodes(), len(self._G.nodes())):
+            for node in self._iteration_order(order_of_label_propagation):
                 new_label = self._find_max_label(node, label_ties_resolution)
                 if self._label_map[node] != new_label:
                     self._label_map[node] = new_label
