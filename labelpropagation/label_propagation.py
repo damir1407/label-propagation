@@ -22,13 +22,16 @@ class LabelPropagation:
         if draw:
             self._draw_graph()
         start_time = time.clock()
-        self._algorithm(label_ties_resolution, label_equilibrium_criterium, order_of_label_propagation, maximum_iterations)
+        self._algorithm(label_ties_resolution, label_equilibrium_criterium,
+                        order_of_label_propagation, maximum_iterations)
         runtime = time.clock() - start_time
         if draw:
             self._draw_graph()
         self._print_results_of_run(runtime)
+        self._iterations = 0
 
-    def evaluate(self, label_ties_resolution, label_equilibrium_criterium, order_of_label_propagation, k, maximum_iterations=100):
+    def evaluate(self, label_ties_resolution, label_equilibrium_criterion,
+                 order_of_label_propagation, k, maximum_iterations=100):
         """
         Runs the algorithm k times, and prints the average number of communities found.
         Usage:
@@ -37,14 +40,16 @@ class LabelPropagation:
         More details about "label_ties_resolution_string" can be found in the README file.
         """
         final_number_of_groups = []
-        runtimes = []
+        runtime_list = []
         for i in range(k):
             self._initialize_labels()
             start_time = time.clock()
-            self._algorithm(label_ties_resolution, label_equilibrium_criterium, order_of_label_propagation, maximum_iterations)
-            runtimes.append(time.clock() - start_time)
+            self._algorithm(label_ties_resolution, label_equilibrium_criterion,
+                            order_of_label_propagation, maximum_iterations)
+            runtime_list.append(time.clock() - start_time)
+            self._iterations = 0
             final_number_of_groups.append(self._get_unique_groups())
-        self._print_results_of_evaluate(k, final_number_of_groups, runtimes)
+        self._print_results_of_evaluate(k, final_number_of_groups, runtime_list)
 
     def _print_results_of_run(self, runtime):
         print("-Run method-")
@@ -53,10 +58,10 @@ class LabelPropagation:
         print("Number of iterations: %d" % self._iterations)
         print()
 
-    def _print_results_of_evaluate(self, k, final_number_of_groups, runtimes):
+    def _print_results_of_evaluate(self, k, final_number_of_groups, runtime_list):
         print("-Evaluate method-")
-        print("Average number of communities found in %d attempts: %s" % (k, sum(final_number_of_groups) / len(final_number_of_groups)))
-        print("Average time elapsed in %d attempts: %f miliseconds" % (k, float(sum(runtimes) / len(runtimes)) * 1000))
+        print("Average number of communities found in %d attempts: %s" % (k, average(final_number_of_groups)))
+        print("Average time elapsed in %d attempts: %f miliseconds" % (k, float(average(runtime_list)) * 1000))
         counted = Counter(final_number_of_groups)
         for key in counted.keys():
             print("In %d attempts number of communities found was %d" % (counted[key], key))
@@ -75,8 +80,7 @@ class LabelPropagation:
         nx.draw(self._G, with_labels=self._G.nodes, node_color=colors)
         plt.show()
 
-    #TODO Rename find max label function
-    def _find_max_label(self, node, label_ties_resolution):
+    def _max_neighbouring_label(self, node, label_ties_resolution):
         labels = [self._label_map[adj] for adj in self._G[node].keys()]
         if all_labels_maximal(labels):
             if label_ties_resolution == "random":
@@ -90,20 +94,14 @@ class LabelPropagation:
                     return random.choice(labels)
         return max(Counter(labels).items(), key=operator.itemgetter(1))[0]
 
-    def _strong_community(self):
+    def _convergence(self, label_equilibrium_criterion):
         for node in self._G.nodes():
             labels = [self._label_map[adj] for adj in self._G[node].keys()]
             if all_labels_maximal(labels):
-                return True
-            if self._label_map[node] != max(Counter(labels).items(), key=operator.itemgetter(1))[0]:
-                return True
-        return False
-
-    def _label_equilibrium(self):
-        for node in self._G.nodes():
-            labels = [self._label_map[adj] for adj in self._G[node].keys()]
-            if all_labels_maximal(labels):
-                continue
+                if label_equilibrium_criterion == "label-equilibrium":
+                    continue
+                elif label_equilibrium_criterion == "strong-community":
+                    return True
             if self._label_map[node] != max(Counter(labels).items(), key=operator.itemgetter(1))[0]:
                 return True
         return False
@@ -117,24 +115,23 @@ class LabelPropagation:
             #TODO Investigate clever custom error handling ways
             pass
 
-    def _algorithm(self, label_ties_resolution, label_equilibrium_criterium,
+    def _algorithm(self, label_ties_resolution, label_equilibrium_criterion,
                    order_of_label_propagation, maximum_iterations):
         change = True
-        #TODO: Think about nicer way to count iterations
-        self._iterations = 0
         while change and self._iterations < maximum_iterations:
             self._iterations = self._iterations + 1
             change = False
             for node in self._iteration_order(order_of_label_propagation):
-                new_label = self._find_max_label(node, label_ties_resolution)
+                new_label = self._max_neighbouring_label(node, label_ties_resolution)
                 if self._label_map[node] != new_label:
                     self._label_map[node] = new_label
                     change = True
-            if label_equilibrium_criterium == "strong-community":
-                change = self._strong_community()
-            elif label_equilibrium_criterium == "label-equilibrium":
-                change = self._label_equilibrium()
+            if label_equilibrium_criterion != "change":
+                change = self._convergence(label_equilibrium_criterion)
 
+
+def average(lst):
+    return sum(lst) / len(lst)
 
 def all_labels_maximal(labels):
     label_count = list(Counter(labels).values())
