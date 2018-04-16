@@ -10,7 +10,8 @@ class LabelPropagation:
         self._label_map = {}
         self._iterations = 0
 
-    def run(self, label_ties_resolution, label_equilibrium_criterium, order_of_label_propagation, draw=False, maximum_iterations=100):
+    def run(self, label_ties_resolution, label_equilibrium_criterium, order_of_label_propagation,
+            draw=False, maximum_iterations=100):
         """
         Runs the algorithm once, and presents a drawing of the result.
         Usage:
@@ -41,30 +42,38 @@ class LabelPropagation:
         """
         final_number_of_groups = []
         runtime_list = []
+        iteration_list = []
         for i in range(k):
             self._initialize_labels()
             start_time = time.clock()
             self._algorithm(label_ties_resolution, label_equilibrium_criterion,
                             order_of_label_propagation, maximum_iterations)
             runtime_list.append(time.clock() - start_time)
+            iteration_list.append(self._iterations)
             self._iterations = 0
             final_number_of_groups.append(self._get_unique_groups())
-        self._print_results_of_evaluate(k, final_number_of_groups, runtime_list)
+        self._print_results_of_evaluate(k, final_number_of_groups, runtime_list, iteration_list)
 
     def _print_results_of_run(self, runtime):
         print("-Run method-")
         print("Number of communities found: %s" % self._get_unique_groups())
-        print("Time elapsed: %f miliseconds" % (runtime * 1000))
         print("Number of iterations: %d" % self._iterations)
+        print("Time elapsed: %f miliseconds" % (runtime * 1000))
         print()
 
-    def _print_results_of_evaluate(self, k, final_number_of_groups, runtime_list):
+    def _print_results_of_evaluate(self, k, final_number_of_groups, runtime_list, iteration_list):
         print("-Evaluate method-")
         print("Average number of communities found in %d attempts: %s" % (k, average(final_number_of_groups)))
+        counted_communities = Counter(final_number_of_groups)
+        for key in counted_communities.keys():
+            print("\tIn %d attempts number of communities found was %d" % (counted_communities[key], key))
+
+        print("Average number of iterations in %d attempts: %s" % (k, average(iteration_list)))
+        counted_iterations = Counter(iteration_list)
+        for key in counted_iterations.keys():
+            print("\tIn %d attempts number of iterations was %d" % (counted_iterations[key], key))
+
         print("Average time elapsed in %d attempts: %f miliseconds" % (k, float(average(runtime_list)) * 1000))
-        counted = Counter(final_number_of_groups)
-        for key in counted.keys():
-            print("In %d attempts number of communities found was %d" % (counted[key], key))
         print()
 
     def _get_unique_groups(self):
@@ -133,6 +142,7 @@ class LabelPropagation:
 def average(lst):
     return sum(lst) / len(lst)
 
+
 def all_labels_maximal(labels):
     label_count = list(Counter(labels).values())
     if len(label_count) == 1:
@@ -141,6 +151,7 @@ def all_labels_maximal(labels):
         if label_count[0] != label_cnt:
             return False
     return True
+
 
 def read_file(file_path):
     with open(file_path, "rt") as f:
