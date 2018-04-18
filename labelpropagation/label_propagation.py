@@ -5,12 +5,13 @@ from collections import Counter
 class LabelPropagation:
     def __init__(self, file_path):
         self._G = nx.Graph()
+        # TODO: Adjust read file to handle weighted graphs
         edges = read_file(file_path)
         self._G.add_edges_from(edges)
         self._label_map = {}
         self._iterations = 0
 
-    def run(self, label_ties_resolution, label_equilibrium_criterium, order_of_label_propagation,
+    def run(self, label_ties_resolution, label_equilibrium_criteria, order_of_label_propagation,
             draw=False, maximum_iterations=100):
         """
         Runs the algorithm once, and presents a drawing of the result.
@@ -19,12 +20,12 @@ class LabelPropagation:
             lp.run("label_ties_resolution_string")
         More details about "label_ties_resolution_string" can be found in the README file.
         """
-        argument_check(label_ties_resolution, label_equilibrium_criterium, order_of_label_propagation)
+        argument_check(label_ties_resolution, label_equilibrium_criteria, order_of_label_propagation)
         self._initialize_labels()
         if draw and len(self._G.nodes()) < 50:
             self._draw_graph()
         start_time = time.clock()
-        self._algorithm(label_ties_resolution, label_equilibrium_criterium,
+        self._algorithm(label_ties_resolution, label_equilibrium_criteria,
                         order_of_label_propagation, maximum_iterations)
         runtime = time.clock() - start_time
         if draw and len(self._G.nodes()) < 50:
@@ -32,7 +33,7 @@ class LabelPropagation:
         self._print_results_of_run(runtime)
         self._iterations = 0
 
-    def evaluate(self, label_ties_resolution, label_equilibrium_criterium,
+    def evaluate(self, label_ties_resolution, label_equilibrium_criteria,
                  order_of_label_propagation, k, maximum_iterations=100):
         """
         Runs the algorithm k times, and prints the average number of communities found.
@@ -47,7 +48,7 @@ class LabelPropagation:
         for i in range(k):
             self._initialize_labels()
             start_time = time.clock()
-            self._algorithm(label_ties_resolution, label_equilibrium_criterium,
+            self._algorithm(label_ties_resolution, label_equilibrium_criteria,
                             order_of_label_propagation, maximum_iterations)
             runtime_list.append(time.clock() - start_time)
             iteration_list.append(self._iterations)
@@ -59,9 +60,10 @@ class LabelPropagation:
         print("-Run method-")
         print("Number of communities found: %s" % self._get_unique_groups())
         print("Number of iterations: %d" % self._iterations)
-        print("Time elapsed: %f miliseconds" % (runtime * 1000))
+        print("Time elapsed: %f milliseconds" % (runtime * 1000))
         print()
 
+    # TODO: Think of a more clever way to write static methods
     def _print_results_of_evaluate(self, k, final_number_of_groups, runtime_list, iteration_list):
         print("-Evaluate method-")
         print("Average number of communities found in %d attempts: %s" % (k, average(final_number_of_groups)))
@@ -74,7 +76,7 @@ class LabelPropagation:
         for key in counted_iterations.keys():
             print("\tIn %d attempts number of iterations was %d" % (counted_iterations[key], key))
 
-        print("Average time elapsed in %d attempts: %f miliseconds" % (k, float(average(runtime_list)) * 1000))
+        print("Average time elapsed in %d attempts: %f milliseconds" % (k, float(average(runtime_list)) * 1000))
         print()
 
     def _get_unique_groups(self):
@@ -104,13 +106,13 @@ class LabelPropagation:
                     return random.choice(labels)
         return max(Counter(labels).items(), key=operator.itemgetter(1))[0]
 
-    def _convergence(self, label_equilibrium_criterium):
+    def _convergence(self, label_equilibrium_criteria):
         for node in self._G.nodes():
             labels = [self._label_map[adj] for adj in self._G[node].keys()]
             if all_labels_maximal(labels):
-                if label_equilibrium_criterium == "label-equilibrium":
+                if label_equilibrium_criteria == "label-equilibrium":
                     continue
-                elif label_equilibrium_criterium == "strong-community":
+                elif label_equilibrium_criteria == "strong-community":
                     return True
             if self._label_map[node] != max(Counter(labels).items(), key=operator.itemgetter(1))[0]:
                 return True
@@ -122,7 +124,7 @@ class LabelPropagation:
         elif order == "asynchronous":
             return random.sample(self._G.nodes(), len(self._G.nodes()))
 
-    def _algorithm(self, label_ties_resolution, label_equilibrium_criterium,
+    def _algorithm(self, label_ties_resolution, label_equilibrium_criteria,
                    order_of_label_propagation, maximum_iterations):
         change = True
         while change and self._iterations < maximum_iterations:
@@ -133,15 +135,15 @@ class LabelPropagation:
                 if self._label_map[node] != new_label:
                     self._label_map[node] = new_label
                     change = True
-            if label_equilibrium_criterium != "change":
-                change = self._convergence(label_equilibrium_criterium)
+            if label_equilibrium_criteria != "change":
+                change = self._convergence(label_equilibrium_criteria)
 
 
-def argument_check(label_ties_resolution, label_equilibrium_criterium, order_of_label_propagation):
+def argument_check(label_ties_resolution, label_equilibrium_criteria, order_of_label_propagation):
     if label_ties_resolution not in ["random", "inclusion", "retention"]:
         raise ValueError("Invalid label ties resolution parameter")
-    if label_equilibrium_criterium not in ["change", "label-equilibrium", "strong-community"]:
-        raise ValueError("Invalid label equilibrium criterium parameter")
+    if label_equilibrium_criteria not in ["change", "label-equilibrium", "strong-community"]:
+        raise ValueError("Invalid label equilibrium criteria parameter")
     if order_of_label_propagation not in ["synchronous", "asynchronous"]:
         raise ValueError("Invalid iteration order parameter")
 
