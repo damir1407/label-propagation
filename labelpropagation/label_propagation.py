@@ -3,13 +3,34 @@ from collections import Counter
 
 
 class LabelPropagation:
-    def __init__(self, file_path):
+    def __init__(self, file_path, graph_type="U"):
+        """"
+        Initialization of object attributes.
+        """
         self._G = nx.Graph()
-        # TODO: Adjust read file to handle weighted graphs
-        edges = read_file(file_path)
-        self._G.add_edges_from(edges)
+        self._create_graph_from_file(file_path, graph_type)
         self._label_map = {}
         self._iterations = 0
+        self._final_number_of_groups = []
+        self._runtime_list = []
+        self._iteration_list = []
+
+    def _create_graph_from_file(self, file_path, graph_type):
+        """"
+        Creates the graph from input file, based on whether it's weighted or unweighted.
+        """
+        with open(file_path, "rt") as f:
+            edges = []
+            for line in f:
+                line = line.split()
+                if graph_type == "U":
+                    edges.append((line[0], line[1]))
+                elif graph_type == "W":
+                    edges.append((line[0], line[1], line[2]))
+            if graph_type == "U":
+                self._G.add_edges_from(edges)
+            elif graph_type == "W":
+                self._G.add_weighted_edges_from(edges)
 
     def run(self, label_ties_resolution, label_equilibrium_criteria, order_of_label_propagation,
             draw=False, maximum_iterations=100):
@@ -24,14 +45,16 @@ class LabelPropagation:
         self._initialize_labels()
         if draw and len(self._G.nodes()) < 50:
             self._draw_graph()
+
         start_time = time.clock()
         self._algorithm(label_ties_resolution, label_equilibrium_criteria,
                         order_of_label_propagation, maximum_iterations)
         runtime = time.clock() - start_time
+
         if draw and len(self._G.nodes()) < 50:
             self._draw_graph()
         self._print_results_of_run(runtime)
-        self._iterations = 0
+        self._reinitialise_attributes()
 
     def evaluate(self, label_ties_resolution, label_equilibrium_criteria,
                  order_of_label_propagation, k, maximum_iterations=100):
@@ -42,57 +65,86 @@ class LabelPropagation:
             lp.run100("label_ties_resolution_string")
         More details about "label_ties_resolution_string" can be found in the README file.
         """
-        final_number_of_groups = []
-        runtime_list = []
-        iteration_list = []
+        argument_check(label_ties_resolution, label_equilibrium_criteria, order_of_label_propagation)
+
         for i in range(k):
             self._initialize_labels()
+
             start_time = time.clock()
             self._algorithm(label_ties_resolution, label_equilibrium_criteria,
                             order_of_label_propagation, maximum_iterations)
-            runtime_list.append(time.clock() - start_time)
-            iteration_list.append(self._iterations)
+            self._runtime_list.append(time.clock() - start_time)
+
+            self._iteration_list.append(self._iterations)
             self._iterations = 0
-            final_number_of_groups.append(self._get_unique_groups())
-        self._print_results_of_evaluate(k, final_number_of_groups, runtime_list, iteration_list)
+
+            self._final_number_of_groups.append(self._get_number_of_communities())
+        self._print_results_of_evaluate(k)
+        self._reinitialise_attributes()
 
     def _print_results_of_run(self, runtime):
+        """"
+        Print results of run function.
+        """
         print("-Run method-")
-        print("Number of communities found: %s" % self._get_unique_groups())
+        print("Number of communities found: %s" % self._get_number_of_communities())
         print("Number of iterations: %d" % self._iterations)
         print("Time elapsed: %f milliseconds" % (runtime * 1000))
         print()
 
-    # TODO: Think of a more clever way to write static methods
-    def _print_results_of_evaluate(self, k, final_number_of_groups, runtime_list, iteration_list):
+    def _print_results_of_evaluate(self, k):
+        """"
+        Print results of evaluate function.
+        """
         print("-Evaluate method-")
-        print("Average number of communities found in %d attempts: %s" % (k, average(final_number_of_groups)))
-        counted_communities = Counter(final_number_of_groups)
+        print("Average number of communities found in %d attempts: %s" % (k, average(self._final_number_of_groups)))
+        counted_communities = Counter(self._final_number_of_groups)
         for key in counted_communities.keys():
             print("\tIn %d attempts number of communities found was %d" % (counted_communities[key], key))
 
-        print("Average number of iterations in %d attempts: %s" % (k, average(iteration_list)))
-        counted_iterations = Counter(iteration_list)
+        print("Average number of iterations in %d attempts: %s" % (k, average(self._iteration_list)))
+        counted_iterations = Counter(self._iteration_list)
         for key in counted_iterations.keys():
             print("\tIn %d attempts number of iterations was %d" % (counted_iterations[key], key))
 
-        print("Average time elapsed in %d attempts: %f milliseconds" % (k, float(average(runtime_list)) * 1000))
+        print("Average time elapsed in %d attempts: %f milliseconds" % (k, float(average(self._runtime_list)) * 1000))
         print()
 
-    def _get_unique_groups(self):
+    def _reinitialise_attributes(self):
+        """"
+        Reinitialization of object attributes.
+        """
+        self._iterations = 0
+        self._final_number_of_groups = []
+        self._runtime_list = []
+        self._iteration_list = []
+
+    def _get_number_of_communities(self):
+        """"
+        Returns number of communities found.
+        """
         return len(Counter(self._label_map.values()))
 
     def _initialize_labels(self):
+        """"
+        Initialization of graph labels.
+        """
         for i, node in enumerate(self._G.nodes()):
             self._label_map[node] = i
 
     def _draw_graph(self):
+        """"
+        Drawing the image of the graph.
+        """
         colors = [self._label_map.get(node) for node in self._G.nodes()]
         plt.subplot(111)
         nx.draw(self._G, with_labels=self._G.nodes, node_color=colors)
         plt.show()
 
     def _max_neighbouring_label(self, node, label_ties_resolution):
+        """"
+        Algorithm help function, which finds the maximal neighbouring label based on the label_ties_resolution string.
+        """
         labels = [self._label_map[adj] for adj in self._G[node].keys()]
         if all_labels_maximal(labels):
             if label_ties_resolution == "random":
@@ -107,6 +159,9 @@ class LabelPropagation:
         return max(Counter(labels).items(), key=operator.itemgetter(1))[0]
 
     def _convergence(self, label_equilibrium_criteria):
+        """"
+        Algorithm help function, which affects convergence based on label_equilibrium_criteria string.
+        """
         for node in self._G.nodes():
             labels = [self._label_map[adj] for adj in self._G[node].keys()]
             if all_labels_maximal(labels):
@@ -118,14 +173,20 @@ class LabelPropagation:
                 return True
         return False
 
-    def _iteration_order(self, order):
-        if order == "synchronous":
+    def _iteration_order(self, order_of_label_propagation):
+        """"
+        Algorithm help function, which defines node iteration order based on order_of_label_propagation string.
+        """
+        if order_of_label_propagation == "synchronous":
             return self._G.nodes()
-        elif order == "asynchronous":
+        elif order_of_label_propagation == "asynchronous":
             return random.sample(self._G.nodes(), len(self._G.nodes()))
 
     def _algorithm(self, label_ties_resolution, label_equilibrium_criteria,
                    order_of_label_propagation, maximum_iterations):
+        """
+        Main algorithm function.
+        """
         change = True
         while change and self._iterations < maximum_iterations:
             self._iterations = self._iterations + 1
@@ -140,6 +201,9 @@ class LabelPropagation:
 
 
 def argument_check(label_ties_resolution, label_equilibrium_criteria, order_of_label_propagation):
+    """
+    Help function which checks if user input arguments are valid.
+    """
     if label_ties_resolution not in ["random", "inclusion", "retention"]:
         raise ValueError("Invalid label ties resolution parameter")
     if label_equilibrium_criteria not in ["change", "label-equilibrium", "strong-community"]:
@@ -148,11 +212,17 @@ def argument_check(label_ties_resolution, label_equilibrium_criteria, order_of_l
         raise ValueError("Invalid iteration order parameter")
 
 
-def average(lst):
-    return sum(lst) / len(lst)
+def average(input_list):
+    """
+    Help function, which returns the average of the given list.
+    """
+    return sum(input_list) / len(input_list)
 
 
 def all_labels_maximal(labels):
+    """
+    Help function, which returns true if all neighbouring labels are maximal.
+    """
     label_count = list(Counter(labels).values())
     if len(label_count) == 1:
         return False
@@ -160,15 +230,3 @@ def all_labels_maximal(labels):
         if label_count[0] != label_cnt:
             return False
     return True
-
-
-def read_file(file_path):
-    with open(file_path, "rt") as f:
-        edges = []
-        for line in f:
-            line = line.split()
-            if line[0].isalnum():
-                edges.append((line[0], line[1]))
-            else:
-                continue
-        return edges
