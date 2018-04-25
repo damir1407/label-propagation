@@ -1,10 +1,10 @@
-import networkx as nx, matplotlib.pyplot as plt, random, operator, time
+import networkx as nx, matplotlib.pyplot as plt, random, operator, time, copy
 from collections import Counter
 
 
 class LabelPropagation:
     def __init__(self, file_path, graph_type="U"):
-        """"
+        """
         Initialization of object attributes.
         """
         self._G = nx.Graph()
@@ -16,7 +16,7 @@ class LabelPropagation:
         self._iteration_list = []
 
     def _create_graph_from_file(self, file_path, graph_type):
-        """"
+        """
         Creates the graph from input file, based on whether it's weighted or unweighted.
         """
         with open(file_path, "rt") as f:
@@ -83,7 +83,7 @@ class LabelPropagation:
         self._reinitialise_attributes()
 
     def _print_results_of_run(self, runtime):
-        """"
+        """
         Print results of run function.
         """
         print("-Run method-")
@@ -93,7 +93,7 @@ class LabelPropagation:
         print()
 
     def _print_results_of_evaluate(self, k):
-        """"
+        """
         Print results of evaluate function.
         """
         print("-Evaluate method-")
@@ -111,7 +111,7 @@ class LabelPropagation:
         print()
 
     def _reinitialise_attributes(self):
-        """"
+        """
         Reinitialization of object attributes.
         """
         self._iterations = 0
@@ -120,20 +120,20 @@ class LabelPropagation:
         self._iteration_list = []
 
     def _get_number_of_communities(self):
-        """"
+        """
         Returns number of communities found.
         """
         return len(Counter(self._label_map.values()))
 
     def _initialize_labels(self):
-        """"
+        """
         Initialization of graph labels.
         """
         for i, node in enumerate(self._G.nodes()):
             self._label_map[node] = i
 
     def _draw_graph(self):
-        """"
+        """
         Drawing the image of the graph.
         """
         colors = [self._label_map.get(node) for node in self._G.nodes()]
@@ -142,7 +142,7 @@ class LabelPropagation:
         plt.show()
 
     def _max_neighbouring_label(self, node, label_ties_resolution):
-        """"
+        """
         Algorithm help function, which finds the maximal neighbouring label based on the label_ties_resolution string.
         """
         labels = [self._label_map[adj] for adj in self._G[node].keys()]
@@ -159,7 +159,7 @@ class LabelPropagation:
         return max(Counter(labels).items(), key=operator.itemgetter(1))[0]
 
     def _convergence(self, label_equilibrium_criteria):
-        """"
+        """
         Algorithm help function, which affects convergence based on label_equilibrium_criteria string.
         """
         for node in self._G.nodes():
@@ -173,14 +173,28 @@ class LabelPropagation:
                 return True
         return False
 
-    def _iteration_order(self, order_of_label_propagation):
-        """"
-        Algorithm help function, which defines node iteration order based on order_of_label_propagation string.
-        """
-        if order_of_label_propagation == "synchronous":
-            return self._G.nodes()
-        elif order_of_label_propagation == "asynchronous":
-            return random.sample(self._G.nodes(), len(self._G.nodes()))
+    def _asynchronous_propagation(self, label_ties_resolution):
+        change = False
+        for node in random.sample(self._G.nodes(), len(self._G.nodes())):
+            new_label = self._max_neighbouring_label(node, label_ties_resolution)
+            if self._label_map[node] != new_label:
+                self._label_map[node] = new_label
+                change = True
+        return change
+
+    # TODO: Double check synchronous propagation
+    def _synchronous_propagation(self, label_ties_resolution):
+        change = False
+        sync_label_map = copy.deepcopy(self._label_map)
+        for node in random.sample(self._G.nodes(), len(self._G.nodes())):
+            new_label = self._max_neighbouring_label(node, label_ties_resolution)
+            if sync_label_map[node] != new_label:
+                sync_label_map[node] = new_label
+                change = True
+        self._label_map.clear()
+        self._label_map.update(sync_label_map)
+        sync_label_map.clear()
+        return change
 
     def _algorithm(self, label_ties_resolution, label_equilibrium_criteria,
                    order_of_label_propagation, maximum_iterations):
@@ -190,12 +204,10 @@ class LabelPropagation:
         change = True
         while change and self._iterations < maximum_iterations:
             self._iterations = self._iterations + 1
-            change = False
-            for node in self._iteration_order(order_of_label_propagation):
-                new_label = self._max_neighbouring_label(node, label_ties_resolution)
-                if self._label_map[node] != new_label:
-                    self._label_map[node] = new_label
-                    change = True
+            if order_of_label_propagation == "synchronous":
+                change = self._synchronous_propagation(label_ties_resolution)
+            elif order_of_label_propagation == "asynchronous":
+                change = self._asynchronous_propagation(label_ties_resolution)
             if label_equilibrium_criteria != "change":
                 change = self._convergence(label_equilibrium_criteria)
 
