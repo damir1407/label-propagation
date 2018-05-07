@@ -32,8 +32,8 @@ class LabelPropagation:
             elif graph_type == "W":
                 self._G.add_weighted_edges_from(edges)
 
-    def run(self, label_ties_resolution, label_equilibrium_criteria, order_of_label_propagation,
-            draw=False, maximum_iterations=100):
+    def run(self, label_ties_resolution, label_equilibrium_criteria,
+            order_of_label_propagation, draw=False, maximum_iterations=100):
         """
         Runs the algorithm once, and presents a drawing of the result.
         Usage:
@@ -41,18 +41,16 @@ class LabelPropagation:
             lp.run("label_ties_resolution_string")
         More details about "label_ties_resolution_string" can be found in the README file.
         """
-        argument_check(label_ties_resolution, label_equilibrium_criteria, order_of_label_propagation)
         self._initialize_labels()
-        if draw and len(self._G.nodes()) < 50:
-            self._draw_graph()
+
+        self._draw_graph(draw)
 
         start_time = time.clock()
         self._algorithm(label_ties_resolution, label_equilibrium_criteria,
                         order_of_label_propagation, maximum_iterations)
         runtime = time.clock() - start_time
 
-        if draw and len(self._G.nodes()) < 50:
-            self._draw_graph()
+        self._draw_graph(draw)
         self._print_results_of_run(runtime)
         self._reinitialise_attributes()
 
@@ -65,8 +63,6 @@ class LabelPropagation:
             lp.run100("label_ties_resolution_string")
         More details about "label_ties_resolution_string" can be found in the README file.
         """
-        argument_check(label_ties_resolution, label_equilibrium_criteria, order_of_label_propagation)
-
         for i in range(k):
             self._initialize_labels()
 
@@ -132,19 +128,23 @@ class LabelPropagation:
         for i, node in enumerate(self._G.nodes()):
             self._label_map[node] = i
 
-    def _draw_graph(self):
+    def _draw_graph(self, draw):
         """
         Drawing the image of the graph.
         """
-        colors = [self._label_map.get(node) for node in self._G.nodes()]
-        plt.subplot(111)
-        nx.draw(self._G, with_labels=self._G.nodes, node_color=colors)
-        plt.show()
+        if draw and len(self._G.nodes()) < 50:
+            colors = [self._label_map.get(node) for node in self._G.nodes()]
+            plt.subplot(111)
+            nx.draw(self._G, with_labels=self._G.nodes, node_color=colors)
+            plt.show()
 
-    def _max_neighbouring_label(self, node, label_ties_resolution):
+    def _maximal_neighbouring_label(self, node, label_ties_resolution):
         """
         Algorithm help function, which finds the maximal neighbouring label based on the label_ties_resolution string.
         """
+        if label_ties_resolution not in ["random", "inclusion", "retention"]:
+            raise ValueError("Invalid label ties resolution parameter")
+
         labels = [self._label_map[adj] for adj in self._G[node].keys()]
         if all_labels_maximal(labels):
             if label_ties_resolution == "random":
@@ -162,6 +162,9 @@ class LabelPropagation:
         """
         Algorithm help function, which affects convergence based on label_equilibrium_criteria string.
         """
+        if label_equilibrium_criteria not in ["label-equilibrium", "strong-community"]:
+            raise ValueError("Invalid label equilibrium criteria parameter")
+
         for node in self._G.nodes():
             labels = [self._label_map[adj] for adj in self._G[node].keys()]
             if all_labels_maximal(labels):
@@ -176,7 +179,7 @@ class LabelPropagation:
     def _asynchronous_propagation(self, label_ties_resolution):
         change = False
         for node in random.sample(self._G.nodes(), len(self._G.nodes())):
-            new_label = self._max_neighbouring_label(node, label_ties_resolution)
+            new_label = self._maximal_neighbouring_label(node, label_ties_resolution)
             if self._label_map[node] != new_label:
                 self._label_map[node] = new_label
                 change = True
@@ -187,7 +190,7 @@ class LabelPropagation:
         change = False
         sync_label_map = copy.deepcopy(self._label_map)
         for node in random.sample(self._G.nodes(), len(self._G.nodes())):
-            new_label = self._max_neighbouring_label(node, label_ties_resolution)
+            new_label = self._maximal_neighbouring_label(node, label_ties_resolution)
             if sync_label_map[node] != new_label:
                 sync_label_map[node] = new_label
                 change = True
@@ -208,20 +211,10 @@ class LabelPropagation:
                 change = self._synchronous_propagation(label_ties_resolution)
             elif order_of_label_propagation == "asynchronous":
                 change = self._asynchronous_propagation(label_ties_resolution)
+            else:
+                raise ValueError("Invalid iteration order parameter")
             if label_equilibrium_criteria != "change":
                 change = self._convergence(label_equilibrium_criteria)
-
-
-def argument_check(label_ties_resolution, label_equilibrium_criteria, order_of_label_propagation):
-    """
-    Help function which checks if user input arguments are valid.
-    """
-    if label_ties_resolution not in ["random", "inclusion", "retention"]:
-        raise ValueError("Invalid label ties resolution parameter")
-    if label_equilibrium_criteria not in ["change", "label-equilibrium", "strong-community"]:
-        raise ValueError("Invalid label equilibrium criteria parameter")
-    if order_of_label_propagation not in ["synchronous", "asynchronous"]:
-        raise ValueError("Invalid iteration order parameter")
 
 
 def average(input_list):
