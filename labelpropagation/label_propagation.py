@@ -1,4 +1,4 @@
-import networkx as nx, matplotlib.pyplot as plt, random, operator, time, copy
+import networkx as nx, matplotlib.pyplot as plt, random, operator, time, copy, numpy as np
 from collections import Counter
 
 
@@ -9,6 +9,7 @@ class LabelPropagation:
         """
         self._G = nx.Graph()
         self._create_graph_from_file(file_path, graph_type)
+        print(self._G["A"]["B"]["weight"])
         self._label_map = {}
         self._iterations = 0
         self._final_number_of_groups = []
@@ -93,17 +94,17 @@ class LabelPropagation:
         Print results of evaluate function.
         """
         print("-Evaluate method-")
-        print("Average number of communities found in %d attempts: %s" % (k, average(self._final_number_of_groups)))
+        print("Average number of communities found in %d attempts: %s" % (k, np.average(self._final_number_of_groups)))
         counted_communities = Counter(self._final_number_of_groups)
         for key in counted_communities.keys():
             print("\tIn %d attempts number of communities found was %d" % (counted_communities[key], key))
 
-        print("Average number of iterations in %d attempts: %s" % (k, average(self._iteration_list)))
+        print("Average number of iterations in %d attempts: %s" % (k, np.average(self._iteration_list)))
         counted_iterations = Counter(self._iteration_list)
         for key in counted_iterations.keys():
             print("\tIn %d attempts number of iterations was %d" % (counted_iterations[key], key))
 
-        print("Average time elapsed in %d attempts: %f milliseconds" % (k, float(average(self._runtime_list)) * 1000))
+        print("Average time elapsed in %d attempts: %f milliseconds" % (k, float(np.average(self._runtime_list)) * 1000))
         print()
 
     def _reinitialise_attributes(self):
@@ -185,7 +186,6 @@ class LabelPropagation:
                 change = True
         return change
 
-    # TODO: Double check synchronous propagation
     def _synchronous_propagation(self, label_ties_resolution):
         change = False
         sync_label_map = copy.deepcopy(self._label_map)
@@ -194,9 +194,7 @@ class LabelPropagation:
             if sync_label_map[node] != new_label:
                 sync_label_map[node] = new_label
                 change = True
-        self._label_map.clear()
-        self._label_map.update(sync_label_map)
-        sync_label_map.clear()
+        self._label_map = sync_label_map
         return change
 
     def _algorithm(self, label_ties_resolution, label_equilibrium_criteria,
@@ -217,13 +215,6 @@ class LabelPropagation:
                 change = self._convergence(label_equilibrium_criteria)
 
 
-def average(input_list):
-    """
-    Help function, which returns the average of the given list.
-    """
-    return sum(input_list) / len(input_list)
-
-
 def all_labels_maximal(labels):
     """
     Help function, which returns true if all neighbouring labels are maximal.
@@ -231,7 +222,4 @@ def all_labels_maximal(labels):
     label_count = list(Counter(labels).values())
     if len(label_count) == 1:
         return False
-    for label_cnt in label_count:
-        if label_count[0] != label_cnt:
-            return False
-    return True
+    return label_count.count(label_count[0]) == len(label_count)
