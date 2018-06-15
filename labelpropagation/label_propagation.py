@@ -1,5 +1,11 @@
-import networkx as nx, matplotlib.pyplot as plt, random, operator, time, copy, numpy as np
 from collections import Counter
+import networkx as nx
+import matplotlib.pyplot as plt
+import numpy as np
+import random
+import operator
+import time
+import copy
 
 
 class LabelPropagation:
@@ -8,15 +14,16 @@ class LabelPropagation:
         Initialization of object attributes.
         """
         self._G = nx.Graph()
-        self._create_graph_from_file(file_path, graph_type)
-        print(self._G["A"]["B"]["weight"])
+        self.graph_type = graph_type
+        self._create_graph_from_file(file_path)
         self._label_map = {}
         self._iterations = 0
         self._final_number_of_groups = []
         self._runtime_list = []
         self._iteration_list = []
+        self._settings = {}
 
-    def _create_graph_from_file(self, file_path, graph_type):
+    def _create_graph_from_file(self, file_path):
         """
         Creates the graph from input file, based on whether it's weighted or unweighted.
         """
@@ -24,16 +31,16 @@ class LabelPropagation:
             edges = []
             for line in f:
                 line = line.split()
-                if graph_type == "U":
+                if self.graph_type == "U":
                     edges.append((line[0], line[1]))
-                elif graph_type == "W":
+                elif self.graph_type == "W":
                     edges.append((line[0], line[1], line[2]))
-            if graph_type == "U":
+            if self.graph_type == "U":
                 self._G.add_edges_from(edges)
-            elif graph_type == "W":
+            elif self.graph_type == "W":
                 self._G.add_weighted_edges_from(edges)
 
-    def run(self, label_ties_resolution, label_equilibrium_criteria,
+    def run(self, maximal_label_condition, label_ties_resolution, label_equilibrium_criteria,
             order_of_label_propagation, draw=False, maximum_iterations=100):
         """
         Runs the algorithm once, and presents a drawing of the result.
@@ -42,21 +49,32 @@ class LabelPropagation:
             lp.run("label_ties_resolution_string")
         More details about "label_ties_resolution_string" can be found in the README file.
         """
+        if maximal_label_condition == "weight" and not self.graph_type == "W":
+            raise ValueError("Cannot perform weighted propagation, because graph type is not \"W\" (Weighted)")
+
+        self._settings = {
+            "maximal_label_condition": maximal_label_condition,
+            "label_ties_resolution": label_ties_resolution,
+            "label_equilibrium_criteria": label_equilibrium_criteria,
+            "order_of_label_propagation": order_of_label_propagation,
+            "maximum_iterations": maximum_iterations,
+            "draw": draw,
+        }
+
         self._initialize_labels()
 
-        self._draw_graph(draw)
+        self._draw_graph()
 
         start_time = time.clock()
-        self._algorithm(label_ties_resolution, label_equilibrium_criteria,
-                        order_of_label_propagation, maximum_iterations)
+        self._algorithm()
         runtime = time.clock() - start_time
 
-        self._draw_graph(draw)
+        self._draw_graph()
         self._print_results_of_run(runtime)
         self._reinitialise_attributes()
 
-    def evaluate(self, label_ties_resolution, label_equilibrium_criteria,
-                 order_of_label_propagation, k, maximum_iterations=100):
+    def evaluate(self, maximal_label_condition, label_ties_resolution,
+                 label_equilibrium_criteria, order_of_label_propagation, k, maximum_iterations=100):
         """
         Runs the algorithm k times, and prints the average number of communities found.
         Usage:
@@ -64,12 +82,22 @@ class LabelPropagation:
             lp.run100("label_ties_resolution_string")
         More details about "label_ties_resolution_string" can be found in the README file.
         """
+        if maximal_label_condition == "weight" and not self.graph_type == "W":
+            raise ValueError("Cannot perform weighted propagation, because graph type is not \"W\" (Weighted)")
+
+        self._settings = {
+            "maximal_label_condition": maximal_label_condition,
+            "label_ties_resolution": label_ties_resolution,
+            "label_equilibrium_criteria": label_equilibrium_criteria,
+            "order_of_label_propagation": order_of_label_propagation,
+            "maximum_iterations": maximum_iterations,
+        }
+
         for i in range(k):
             self._initialize_labels()
 
             start_time = time.clock()
-            self._algorithm(label_ties_resolution, label_equilibrium_criteria,
-                            order_of_label_propagation, maximum_iterations)
+            self._algorithm()
             self._runtime_list.append(time.clock() - start_time)
 
             self._iteration_list.append(self._iterations)
@@ -104,7 +132,8 @@ class LabelPropagation:
         for key in counted_iterations.keys():
             print("\tIn %d attempts number of iterations was %d" % (counted_iterations[key], key))
 
-        print("Average time elapsed in %d attempts: %f milliseconds" % (k, float(np.average(self._runtime_list)) * 1000))
+        print("Average time elapsed in %d attempts: %f milliseconds" %
+              (k, float(np.average(self._runtime_list)) * 1000))
         print()
 
     def _reinitialise_attributes(self):
@@ -129,97 +158,121 @@ class LabelPropagation:
         for i, node in enumerate(self._G.nodes()):
             self._label_map[node] = i
 
-    def _draw_graph(self, draw):
+    def _draw_graph(self):
         """
         Drawing the image of the graph.
         """
-        if draw and len(self._G.nodes()) < 50:
+        if self._settings["draw"] and len(self._G.nodes()) < 50:
             colors = [self._label_map.get(node) for node in self._G.nodes()]
             plt.subplot(111)
             nx.draw(self._G, with_labels=self._G.nodes, node_color=colors)
             plt.show()
 
-    def _maximal_neighbouring_label(self, node, label_ties_resolution):
+    def _maximal_neighbouring_label(self, node):
         """
         Algorithm help function, which finds the maximal neighbouring label based on the label_ties_resolution string.
         """
-        if label_ties_resolution not in ["random", "inclusion", "retention"]:
+        if self._settings["label_ties_resolution"] not in ["random", "inclusion", "retention"]:
             raise ValueError("Invalid label ties resolution parameter")
 
         labels = [self._label_map[adj] for adj in self._G[node].keys()]
-        if all_labels_maximal(labels):
-            if label_ties_resolution == "random":
-                return random.choice(labels)
-            elif label_ties_resolution == "inclusion":
+        label_count = Counter(labels)
+        max_value = max(label_count.values())
+        label_count_dict = {key: max_value for key in label_count.keys() if label_count[key] == max_value}
+
+        if len(label_count_dict) == 1:
+            x = list(label_count_dict.keys())[0]
+            return x
+        else:
+            if self._settings["label_ties_resolution"] == "random":
+                return random.choice(list(label_count_dict.keys()))
+            # TODO: Fix inclusion
+            elif self._settings["label_ties_resolution"] == "inclusion":
                 labels.append(self._label_map[node])
-            elif label_ties_resolution == "retention":
-                if self._label_map[node] in labels:
+            elif self._settings["label_ties_resolution"] == "retention":
+                if self._label_map[node] in label_count_dict.keys():
                     return self._label_map[node]
                 else:
-                    return random.choice(labels)
-        return max(Counter(labels).items(), key=operator.itemgetter(1))[0]
+                    return random.choice(list(label_count_dict.keys()))
 
-    def _convergence(self, label_equilibrium_criteria):
+    # TODO: _maximal_neighbouring_weight method
+    def _maximal_neighbouring_weight(self, node):
+
+        if self._settings["label_ties_resolution"] not in ["random", "inclusion", "retention"]:
+            raise ValueError("Invalid label ties resolution parameter")
+
+        # weights = [self._G[node][adj]["weight"] for adj in self._G[node].keys()]
+        # labels = [self._label_map[adj] for adj in self._G[node].keys()]
+        weights = {self._label_map[adj]: 0 for adj in self._G[node].keys()}
+        for adj in self._G[node].keys():
+            weights[self._label_map[adj]] = weights[self._label_map[adj]] + int(self._G[node][adj]["weight"])
+        print(weights)
+
+    def _convergence(self):
         """
         Algorithm help function, which affects convergence based on label_equilibrium_criteria string.
         """
-        if label_equilibrium_criteria not in ["label-equilibrium", "strong-community"]:
+        if self._settings["label_equilibrium_criteria"] not in ["label-equilibrium", "strong-community"]:
             raise ValueError("Invalid label equilibrium criteria parameter")
 
+        # TODO: Double check this
         for node in self._G.nodes():
             labels = [self._label_map[adj] for adj in self._G[node].keys()]
-            if all_labels_maximal(labels):
-                if label_equilibrium_criteria == "label-equilibrium":
+            label_count = Counter(labels)
+            max_value = max(label_count.values())
+            label_count_dict = {key: max_value for key in label_count.keys() if label_count[key] == max_value}
+
+            if len(label_count_dict) > 1:
+                if self._settings["label_equilibrium_criteria"] == "label-equilibrium":
                     continue
-                elif label_equilibrium_criteria == "strong-community":
+                elif self._settings["label_equilibrium_criteria"] == "strong-community":
                     return True
-            if self._label_map[node] != max(Counter(labels).items(), key=operator.itemgetter(1))[0]:
+            if self._label_map[node] != list(label_count_dict.keys())[0]:
                 return True
         return False
 
-    def _asynchronous_propagation(self, label_ties_resolution):
+    def _asynchronous_propagation(self):
         change = False
         for node in random.sample(self._G.nodes(), len(self._G.nodes())):
-            new_label = self._maximal_neighbouring_label(node, label_ties_resolution)
+            if self._settings["maximal_label_condition"] == "label":
+                new_label = self._maximal_neighbouring_label(node)
+            elif self._settings["maximal_label_condition"] == "weight":
+                new_label = self._maximal_neighbouring_weight(node)
+            else:
+                raise ValueError("Invalid maximal label condition parameter")
             if self._label_map[node] != new_label:
                 self._label_map[node] = new_label
                 change = True
         return change
 
-    def _synchronous_propagation(self, label_ties_resolution):
+    def _synchronous_propagation(self):
         change = False
         sync_label_map = copy.deepcopy(self._label_map)
         for node in random.sample(self._G.nodes(), len(self._G.nodes())):
-            new_label = self._maximal_neighbouring_label(node, label_ties_resolution)
+            if self._settings["maximal_label_condition"] == "label":
+                new_label = self._maximal_neighbouring_label(node)
+            elif self._settings["maximal_label_condition"] == "weight":
+                new_label = self._maximal_neighbouring_weight(node)
+            else:
+                raise ValueError("Invalid maximal label condition parameter")
             if sync_label_map[node] != new_label:
                 sync_label_map[node] = new_label
                 change = True
         self._label_map = sync_label_map
         return change
 
-    def _algorithm(self, label_ties_resolution, label_equilibrium_criteria,
-                   order_of_label_propagation, maximum_iterations):
+    def _algorithm(self):
         """
         Main algorithm function.
         """
         change = True
-        while change and self._iterations < maximum_iterations:
+        while change and self._iterations < self._settings["maximum_iterations"]:
             self._iterations = self._iterations + 1
-            if order_of_label_propagation == "synchronous":
-                change = self._synchronous_propagation(label_ties_resolution)
-            elif order_of_label_propagation == "asynchronous":
-                change = self._asynchronous_propagation(label_ties_resolution)
+            if self._settings["order_of_label_propagation"] == "synchronous":
+                change = self._synchronous_propagation()
+            elif self._settings["order_of_label_propagation"] == "asynchronous":
+                change = self._asynchronous_propagation()
             else:
                 raise ValueError("Invalid iteration order parameter")
-            if label_equilibrium_criteria != "change":
-                change = self._convergence(label_equilibrium_criteria)
-
-
-def all_labels_maximal(labels):
-    """
-    Help function, which returns true if all neighbouring labels are maximal.
-    """
-    label_count = list(Counter(labels).values())
-    if len(label_count) == 1:
-        return False
-    return label_count.count(label_count[0]) == len(label_count)
+            if self._settings["label_equilibrium_criteria"] != "change":
+                change = self._convergence()
