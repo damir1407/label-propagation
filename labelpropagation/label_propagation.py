@@ -181,32 +181,38 @@ class LabelPropagation:
         label_count_dict = {key: max_value for key in label_count.keys() if label_count[key] == max_value}
 
         if len(label_count_dict) == 1:
-            x = list(label_count_dict.keys())[0]
-            return x
+            return list(label_count_dict.keys())[0]
         else:
             if self._settings["label_ties_resolution"] == "random":
                 return random.choice(list(label_count_dict.keys()))
-            # TODO: Fix inclusion
             elif self._settings["label_ties_resolution"] == "inclusion":
-                labels.append(self._label_map[node])
+                if self._label_map[node] in label_count_dict.keys():
+                    return self._label_map[node]
+                elif self._label_map[node] in label_count:
+                    if max_value - label_count[self._label_map[node]] > 1:
+                        return random.choice(list(label_count_dict.keys()))
+                    else:
+                        label_count_dict[self._label_map[node]] = max_value
+                        return random.choice(list(label_count_dict.keys()))
+                else:
+                    return random.choice(list(label_count_dict.keys()))
             elif self._settings["label_ties_resolution"] == "retention":
                 if self._label_map[node] in label_count_dict.keys():
                     return self._label_map[node]
                 else:
                     return random.choice(list(label_count_dict.keys()))
 
-    # TODO: _maximal_neighbouring_weight method
     def _maximal_neighbouring_weight(self, node):
-
+        """
+        Algorithm help function, which finds the maximal neighbouring label based on the neighbouring weights.
+        """
         if self._settings["label_ties_resolution"] not in ["random", "inclusion", "retention"]:
             raise ValueError("Invalid label ties resolution parameter")
 
-        # weights = [self._G[node][adj]["weight"] for adj in self._G[node].keys()]
-        # labels = [self._label_map[adj] for adj in self._G[node].keys()]
         weights = {self._label_map[adj]: 0 for adj in self._G[node].keys()}
         for adj in self._G[node].keys():
             weights[self._label_map[adj]] = weights[self._label_map[adj]] + int(self._G[node][adj]["weight"])
-        print(weights)
+        return max(weights.items(), key=operator.itemgetter(1))[0]
 
     def _convergence(self):
         """
