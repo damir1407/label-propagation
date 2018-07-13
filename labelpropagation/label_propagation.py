@@ -3,9 +3,9 @@ import networkx as nx
 import matplotlib.pyplot as plt
 import numpy as np
 import random
-import operator
 import time
 import copy
+import warnings
 
 
 class LabelPropagation:
@@ -14,7 +14,7 @@ class LabelPropagation:
         Initialization of object attributes.
         """
         self._G = nx.Graph()
-        self.graph_type = graph_type
+        self._graph_type = graph_type
         self._create_graph_from_file(file_path)
         self._label_map = {}
         self._iterations = 0
@@ -31,13 +31,15 @@ class LabelPropagation:
             edges = []
             for line in f:
                 line = line.split()
-                if self.graph_type == "U":
+                if self._graph_type == "W" and len(line) < 3:
+                    raise ValueError("Input file does not contain weights.")
+                if self._graph_type == "U":
                     edges.append((line[0], line[1]))
-                elif self.graph_type == "W":
+                elif self._graph_type == "W":
                     edges.append((line[0], line[1], line[2]))
-            if self.graph_type == "U":
+            if self._graph_type == "U":
                 self._G.add_edges_from(edges)
-            elif self.graph_type == "W":
+            elif self._graph_type == "W":
                 self._G.add_weighted_edges_from(edges)
 
     def run(self, maximal_label_condition, label_ties_resolution, label_equilibrium_criteria,
@@ -49,8 +51,11 @@ class LabelPropagation:
             lp.run("label_ties_resolution_string")
         More details about "label_ties_resolution_string" can be found in the README file.
         """
-        if maximal_label_condition == "weight" and not self.graph_type == "W":
-            raise ValueError("Cannot perform weighted propagation, because graph type is not \"W\" (Weighted)")
+        if maximal_label_condition == "weight" and not self._graph_type == "W":
+            raise ValueError("Cannot perform label propagation that includes weighted edges, "
+                             "because graph type is not \"W\" (Weighted)")
+        if maximal_label_condition == "weight" and label_ties_resolution == "inclusion":
+            warnings.warn("Inclusion cannot be used on weighted graphs, random resolution will be performed instead")
 
         self._settings = {
             "maximal_label_condition": maximal_label_condition,
@@ -82,8 +87,11 @@ class LabelPropagation:
             lp.run100("label_ties_resolution_string")
         More details about "label_ties_resolution_string" can be found in the README file.
         """
-        if maximal_label_condition == "weight" and not self.graph_type == "W":
-            raise ValueError("Cannot perform weighted propagation, because graph type is not \"W\" (Weighted)")
+        if maximal_label_condition == "weight" and not self._graph_type == "W":
+            raise ValueError("Cannot perform label propagation that includes weighted edges, "
+                             "because graph type is not \"W\" (Weighted)")
+        if maximal_label_condition == "weight" and label_ties_resolution == "inclusion":
+            warnings.warn("Inclusion cannot be used on weighted graphs, random resolution will be performed instead")
 
         self._settings = {
             "maximal_label_condition": maximal_label_condition,
@@ -182,25 +190,24 @@ class LabelPropagation:
 
         if len(label_count_dict) == 1:
             return list(label_count_dict.keys())[0]
-        else:
-            if self._settings["label_ties_resolution"] == "random":
+        elif self._settings["label_ties_resolution"] == "random":
+            return random.choice(list(label_count_dict.keys()))
+        elif self._settings["label_ties_resolution"] == "inclusion":
+            if self._label_map[node] in label_count_dict.keys():
+                return self._label_map[node]
+            elif self._label_map[node] in label_count:
+                if max_value - label_count[self._label_map[node]] > 1:
+                    return random.choice(list(label_count_dict.keys()))
+                else:
+                    label_count_dict[self._label_map[node]] = max_value
+                    return random.choice(list(label_count_dict.keys()))
+            else:
                 return random.choice(list(label_count_dict.keys()))
-            elif self._settings["label_ties_resolution"] == "inclusion":
-                if self._label_map[node] in label_count_dict.keys():
-                    return self._label_map[node]
-                elif self._label_map[node] in label_count:
-                    if max_value - label_count[self._label_map[node]] > 1:
-                        return random.choice(list(label_count_dict.keys()))
-                    else:
-                        label_count_dict[self._label_map[node]] = max_value
-                        return random.choice(list(label_count_dict.keys()))
-                else:
-                    return random.choice(list(label_count_dict.keys()))
-            elif self._settings["label_ties_resolution"] == "retention":
-                if self._label_map[node] in label_count_dict.keys():
-                    return self._label_map[node]
-                else:
-                    return random.choice(list(label_count_dict.keys()))
+        elif self._settings["label_ties_resolution"] == "retention":
+            if self._label_map[node] in label_count_dict.keys():
+                return self._label_map[node]
+            else:
+                return random.choice(list(label_count_dict.keys()))
 
     def _maximal_neighbouring_weight(self, node):
         """
@@ -212,7 +219,18 @@ class LabelPropagation:
         weights = {self._label_map[adj]: 0 for adj in self._G[node].keys()}
         for adj in self._G[node].keys():
             weights[self._label_map[adj]] = weights[self._label_map[adj]] + int(self._G[node][adj]["weight"])
-        return max(weights.items(), key=operator.itemgetter(1))[0]
+        max_value = max(weights.values())
+        weight_count_dict = {key: max_value for key in weights.keys() if weights[key] == max_value}
+
+        if len(weight_count_dict) == 1:
+            return list(weight_count_dict.keys())[0]
+        elif self._settings["label_ties_resolution"] in ["random", "inclusion"]:
+            return random.choice(list(weight_count_dict.keys()))
+        elif self._settings["label_ties_resolution"] == "retention":
+            if self._label_map[node] in weight_count_dict.keys():
+                return self._label_map[node]
+            else:
+                return random.choice(list(weight_count_dict.keys()))
 
     def _convergence(self):
         """
