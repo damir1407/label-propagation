@@ -42,28 +42,28 @@ class LabelPropagation:
             elif self._graph_type == "W":
                 self._G.add_weighted_edges_from(edges)
 
-    def run(self, maximal_label_condition, label_ties_resolution, label_equilibrium_criteria,
-            order_of_label_propagation, draw=False, maximum_iterations=100):
+    def run(self, label_resolution, equilibrium, order,
+            include_weights=False, draw=False, maximum_iterations=100):
         """
         Runs the algorithm once, and presents a drawing of the result.
         Usage:
             lp = LabelPropagation("path/to/input/file")
-            lp.run("label_ties_resolution_string")
+            lp.run(label_resolution="retention", equilibrium="change", order="asynchronous", draw=True, include_weights=True)
         More details about "label_ties_resolution_string" can be found in the README file.
         """
-        if maximal_label_condition == "weight" and not self._graph_type == "W":
+        if include_weights is True and not self._graph_type == "W":
             raise ValueError("Cannot perform label propagation that includes weighted edges, "
                              "because graph type is not \"W\" (Weighted)")
-        if maximal_label_condition == "weight" and label_ties_resolution == "inclusion":
+        if include_weights is True and label_resolution == "inclusion":
             warnings.warn("Inclusion cannot be used on weighted graphs, random resolution will be performed instead")
 
         self._settings = {
-            "maximal_label_condition": maximal_label_condition,
-            "label_ties_resolution": label_ties_resolution,
-            "label_equilibrium_criteria": label_equilibrium_criteria,
-            "order_of_label_propagation": order_of_label_propagation,
-            "maximum_iterations": maximum_iterations,
+            "label_ties_resolution": label_resolution,
+            "label_equilibrium_criteria": equilibrium,
+            "order_of_label_propagation": order,
+            "include_weights": include_weights,
             "draw": draw,
+            "maximum_iterations": maximum_iterations,
         }
 
         self._initialize_labels()
@@ -78,8 +78,8 @@ class LabelPropagation:
         self._print_results_of_run(runtime)
         self._reinitialise_attributes()
 
-    def evaluate(self, maximal_label_condition, label_ties_resolution,
-                 label_equilibrium_criteria, order_of_label_propagation, k, maximum_iterations=100):
+    def evaluate(self, label_resolution, equilibrium, order,
+                 k, include_weights=False, maximum_iterations=100):
         """
         Runs the algorithm k times, and prints the average number of communities found.
         Usage:
@@ -87,17 +87,17 @@ class LabelPropagation:
             lp.run100("label_ties_resolution_string")
         More details about "label_ties_resolution_string" can be found in the README file.
         """
-        if maximal_label_condition == "weight" and not self._graph_type == "W":
+        if include_weights is True and not self._graph_type == "W":
             raise ValueError("Cannot perform label propagation that includes weighted edges, "
                              "because graph type is not \"W\" (Weighted)")
-        if maximal_label_condition == "weight" and label_ties_resolution == "inclusion":
+        if include_weights is True and label_resolution == "inclusion":
             warnings.warn("Inclusion cannot be used on weighted graphs, random resolution will be performed instead")
 
         self._settings = {
-            "maximal_label_condition": maximal_label_condition,
-            "label_ties_resolution": label_ties_resolution,
-            "label_equilibrium_criteria": label_equilibrium_criteria,
-            "order_of_label_propagation": order_of_label_propagation,
+            "label_ties_resolution": label_resolution,
+            "label_equilibrium_criteria": equilibrium,
+            "order_of_label_propagation": order,
+            "include_weights": include_weights,
             "maximum_iterations": maximum_iterations,
         }
 
@@ -258,12 +258,10 @@ class LabelPropagation:
     def _asynchronous_propagation(self):
         change = False
         for node in random.sample(self._G.nodes(), len(self._G.nodes())):
-            if self._settings["maximal_label_condition"] == "label":
-                new_label = self._maximal_neighbouring_label(node)
-            elif self._settings["maximal_label_condition"] == "weight":
+            if self._settings["include_weights"] is True:
                 new_label = self._maximal_neighbouring_weight(node)
             else:
-                raise ValueError("Invalid maximal label condition parameter")
+                new_label = self._maximal_neighbouring_label(node)
             if self._label_map[node] != new_label:
                 self._label_map[node] = new_label
                 change = True
@@ -273,12 +271,10 @@ class LabelPropagation:
         change = False
         sync_label_map = copy.deepcopy(self._label_map)
         for node in random.sample(self._G.nodes(), len(self._G.nodes())):
-            if self._settings["maximal_label_condition"] == "label":
-                new_label = self._maximal_neighbouring_label(node)
-            elif self._settings["maximal_label_condition"] == "weight":
+            if self._settings["include_weights"] is True:
                 new_label = self._maximal_neighbouring_weight(node)
             else:
-                raise ValueError("Invalid maximal label condition parameter")
+                new_label = self._maximal_neighbouring_label(node)
             if sync_label_map[node] != new_label:
                 sync_label_map[node] = new_label
                 change = True
