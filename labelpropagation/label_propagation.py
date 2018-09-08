@@ -25,7 +25,7 @@ class LabelPropagation:
 
     def _create_graph_from_file(self, file_path):
         """
-        Creates the graph from input file, based on whether it's weighted or unweighted.
+        Creates the graph from input-examples file, based on whether it's weighted or unweighted.
         """
         with open(file_path, "rt") as f:
             edges = []
@@ -47,7 +47,7 @@ class LabelPropagation:
         """
         Runs the algorithm once, and presents a drawing of the result.
         Usage:
-            lp = LabelPropagation("path/to/input/file")
+            lp = LabelPropagation("path/to/input-examples/file")
             lp.run(label_resolution="retention", equilibrium="change", order="asynchronous", draw=True, include_weights=True)
         More details about "label_ties_resolution_string" can be found in the README file.
         """
@@ -83,7 +83,7 @@ class LabelPropagation:
         """
         Runs the algorithm k times, and prints the average number of communities found.
         Usage:
-            lp = LabelPropagation("path/to/input/file")
+            lp = LabelPropagation("path/to/input-examples/file")
             lp.run100("label_ties_resolution_string")
         More details about "label_ties_resolution_string" can be found in the README file.
         """
