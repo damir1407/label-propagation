@@ -1,0 +1,24 @@
+\select@language {english}
+\select@language {slovene}
+\select@language {english}
+\select@language {english}
+\contentsline {chapter}{Abstract}{}{chapter*.2}
+\select@language {english}
+\select@language {english}
+\contentsline {chapter}{\numberline {1}Introduction}{1}{chapter.1}
+\contentsline {chapter}{\numberline {2}Label propagation}{3}{chapter.2}
+\contentsline {section}{\numberline {2.1}Label Ties Resolution}{3}{section.2.1}
+\contentsline {subsection}{\numberline {2.1.1}Random Resolution}{4}{subsection.2.1.1}
+\contentsline {subsection}{\numberline {2.1.2}Inclusion Resolution}{4}{subsection.2.1.2}
+\contentsline {subsection}{\numberline {2.1.3}Retention Resolution}{4}{subsection.2.1.3}
+\contentsline {section}{\numberline {2.2}Label Propagation Order}{4}{section.2.2}
+\contentsline {subsection}{\numberline {2.2.1}Synchronous}{4}{subsection.2.2.1}
+\contentsline {subsection}{\numberline {2.2.2}Asynchronous}{4}{subsection.2.2.2}
+\contentsline {section}{\numberline {2.3}Convergence Criterium}{4}{section.2.3}
+\contentsline {subsection}{\numberline {2.3.1}Label equilibrium}{4}{subsection.2.3.1}
+\contentsline {subsection}{\numberline {2.3.2}Strong communities}{4}{subsection.2.3.2}
+\contentsline {section}{\numberline {2.4}Complexity of the algorithm}{4}{section.2.4}
+\contentsline {chapter}{\numberline {3}Advances of Label Propagation}{7}{chapter.3}
+\contentsline {section}{\numberline {3.1}Consesus clustering}{7}{section.3.1}
+\contentsline {chapter}{\numberline {4}Conclusion}{9}{chapter.4}
+\contentsline {chapter}{Literatura}{11}{Item.21}
