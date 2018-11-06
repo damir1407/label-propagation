@@ -15,7 +15,7 @@ class LabelPropagation:
         """
         self._G = nx.Graph()
         self._graph_type = graph_type
-        self._create_graph_from_file(file_path)
+        self._initialize_graph_from_file(file_path)
         self._label_map = {}
         self._iterations = 0
         self._final_number_of_groups = []
@@ -23,7 +23,7 @@ class LabelPropagation:
         self._iteration_list = []
         self._settings = {}
 
-    def _create_graph_from_file(self, file_path):
+    def _initialize_graph_from_file(self, file_path):
         """
         Creates the graph from input-examples file, based on whether it's weighted or unweighted.
         """
@@ -43,7 +43,7 @@ class LabelPropagation:
                 self._G.add_weighted_edges_from(edges)
 
     def run(self, label_resolution, equilibrium, order,
-            include_weights=False, draw=False, maximum_iterations=100):
+            k=1, include_weights=False, draw=False, maximum_iterations=100):
         """
         Runs the algorithm once, and presents a drawing of the result.
         Usage:
@@ -61,87 +61,81 @@ class LabelPropagation:
             "label_ties_resolution": label_resolution,
             "label_equilibrium_criteria": equilibrium,
             "order_of_label_propagation": order,
+            "number_of_repetitions": k,
             "include_weights": include_weights,
             "draw": draw,
             "maximum_iterations": maximum_iterations,
         }
 
-        self._initialize_labels()
+        for i in range(self._settings["number_of_repetitions"]):
+            self._initialize_labels()
+            self._draw_graph()
 
-        self._draw_graph()
+            start_time = time.clock()
+            self._algorithm()
+            self._runtime_list.append(time.clock() - start_time)
+            self._draw_graph()
 
-        start_time = time.clock()
-        self._algorithm()
-        runtime = time.clock() - start_time
+            self._iteration_list.append(self._iterations)
+            self._iterations = 0
 
-        self._draw_graph()
-        self._print_results_of_run(runtime)
+            self._final_number_of_groups.append(self._get_number_of_communities())
+        if self._settings["number_of_repetitions"] == 1:
+            self._print_results_of_run()
+        else:
+            self._print_results_of_evaluate()
         self._reinitialise_attributes()
 
-    def evaluate(self, label_resolution, equilibrium, order,
-                 k, include_weights=False, maximum_iterations=100):
+    def consensus_clustering(self, label_resolution, equilibrium, order, maximum_iterations=100):
         """
-        Runs the algorithm k times, and prints the average number of communities found.
-        Usage:
-            lp = LabelPropagation("path/to/input-examples/file")
-            lp.run100("label_ties_resolution_string")
-        More details about "label_ties_resolution_string" can be found in the README file.
+        Consensus clustering algorithm
         """
-        if include_weights is True and not self._graph_type == "W":
+        if not self._graph_type == "W":
             raise ValueError("Cannot perform label propagation that includes weighted edges, "
                              "because graph type is not \"W\" (Weighted)")
-        if include_weights is True and label_resolution == "inclusion":
+        if label_resolution == "inclusion":
             warnings.warn("Inclusion cannot be used on weighted graphs, random resolution will be performed instead")
 
         self._settings = {
             "label_ties_resolution": label_resolution,
             "label_equilibrium_criteria": equilibrium,
             "order_of_label_propagation": order,
-            "include_weights": include_weights,
             "maximum_iterations": maximum_iterations,
+            "include_weights": True,
+            "number_of_repetitions": len(self._G),
         }
 
-        for i in range(k):
+        for i in range(self._settings["number_of_repetitions"]):
             self._initialize_labels()
-
-            start_time = time.clock()
             self._algorithm()
-            self._runtime_list.append(time.clock() - start_time)
-
-            self._iteration_list.append(self._iterations)
             self._iterations = 0
 
-            self._final_number_of_groups.append(self._get_number_of_communities())
-        self._print_results_of_evaluate(k)
-        self._reinitialise_attributes()
-
-    def _print_results_of_run(self, runtime):
+    def _print_results_of_run(self):
         """
         Print results of run function.
         """
-        print("-Run method-")
-        print("Number of communities found: %s" % self._get_number_of_communities())
-        print("Number of iterations: %d" % self._iterations)
-        print("Time elapsed: %f milliseconds" % (runtime * 1000))
+        print("Number of communities found: %s" % self._final_number_of_groups[0])
+        print("Number of iterations: %d" % self._iteration_list[0])
+        print("Time elapsed: %f milliseconds" % (self._runtime_list[0] * 1000))
         print()
 
-    def _print_results_of_evaluate(self, k):
+    def _print_results_of_evaluate(self):
         """
         Print results of evaluate function.
         """
-        print("-Evaluate method-")
-        print("Average number of communities found in %d attempts: %s" % (k, np.average(self._final_number_of_groups)))
+        print("Average number of communities found in %d attempts: %s" % (self._settings["number_of_repetitions"], np.average(self._final_number_of_groups)))
         counted_communities = Counter(self._final_number_of_groups)
         for key in counted_communities.keys():
             print("\tIn %d attempts number of communities found was %d" % (counted_communities[key], key))
 
-        print("Average number of iterations in %d attempts: %s" % (k, np.average(self._iteration_list)))
+        print("Average number of iterations in %d attempts: %s" %
+              (self._settings["number_of_repetitions"], np.average(self._iteration_list)))
         counted_iterations = Counter(self._iteration_list)
         for key in counted_iterations.keys():
             print("\tIn %d attempts number of iterations was %d" % (counted_iterations[key], key))
 
         print("Average time elapsed in %d attempts: %f milliseconds" %
-              (k, float(np.average(self._runtime_list)) * 1000))
+              (self._settings["number_of_repetitions"], float(np.average(self._runtime_list)) * 1000))
         print()
 
     def _reinitialise_attributes(self):
@@ -170,7 +164,7 @@ class LabelPropagation:
         """
         Drawing the image of the graph.
         """
-        if self._settings["draw"] and len(self._G.nodes()) < 50:
+        if self._settings["draw"] and len(self._G.nodes()) < 50 and self._settings["number_of_repetitions"] == 1:
             colors = [self._label_map.get(node) for node in self._G.nodes()]
             plt.subplot(111)
             nx.draw(self._G, with_labels=self._G.nodes, node_color=colors)
