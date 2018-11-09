@@ -1,4 +1,5 @@
 from collections import Counter
+from itertools import combinations
 import networkx as nx
 import matplotlib.pyplot as plt
 import numpy as np
@@ -105,10 +106,24 @@ class LabelPropagation:
             "number_of_repetitions": len(self._G),
         }
 
+        x = self._get_clean_dict_graph()
         for i in range(self._settings["number_of_repetitions"]):
             self._initialize_labels()
             self._algorithm()
+
+            communities = self._get_communities()
+            print(communities)
+            for comm in communities:
+                for k1, k2 in combinations(comm, r=2):
+                    if k2 not in x[k1]:
+                        x[k1][k2] = {"weight": 1}
+                    x[k1][k2]["weight"] += 1
+
             self._iterations = 0
+        self._reinitialise_attributes()
+
+        for i in range(self._settings["number_of_repetitions"]):
+            pass
 
     def _print_results_of_run(self):
         """
@@ -123,7 +138,8 @@ class LabelPropagation:
         """
         Print results of evaluate function.
         """
-        print("Average number of communities found in %d attempts: %s" % (self._settings["number_of_repetitions"], np.average(self._final_number_of_groups)))
+        print("Average number of communities found in %d attempts: %s" % (
+            self._settings["number_of_repetitions"], np.average(self._final_number_of_groups)))
         counted_communities = Counter(self._final_number_of_groups)
         for key in counted_communities.keys():
             print("\tIn %d attempts number of communities found was %d" % (counted_communities[key], key))
@@ -146,6 +162,20 @@ class LabelPropagation:
         self._final_number_of_groups = []
         self._runtime_list = []
         self._iteration_list = []
+
+    def _get_clean_dict_graph(self):
+        x = copy.deepcopy(self._G.__dict__["_adj"])
+        for key, val in x.items():
+            for key2, val2 in val.items():
+                val2["weight"] = 0
+        return x
+
+    def _get_communities(self):
+        community_set = set(self._label_map.values())
+        community_dict = {value: [] for value in community_set}
+        for key, value in self._label_map.items():
+            community_dict[value].append(key)
+        return community_dict.values()
 
     def _get_number_of_communities(self):
         """
