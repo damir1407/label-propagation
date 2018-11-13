@@ -106,24 +106,61 @@ class LabelPropagation:
             "number_of_repetitions": len(self._G),
         }
 
-        x = self._get_clean_dict_graph()
+        # STEP 1 - Apply algorithm on G nP times, so to yield nP partitions.
+        all_communities = []
         for i in range(self._settings["number_of_repetitions"]):
             self._initialize_labels()
             self._algorithm()
-
-            communities = self._get_communities()
-            print(communities)
-            for comm in communities:
-                for k1, k2 in combinations(comm, r=2):
-                    if k2 not in x[k1]:
-                        x[k1][k2] = {"weight": 1}
-                    x[k1][k2]["weight"] += 1
-
+            all_communities.append(self._get_communities())
             self._iterations = 0
         self._reinitialise_attributes()
 
-        for i in range(self._settings["number_of_repetitions"]):
-            pass
+        while True:
+            # STEP 2 - Compute the consensus matrix D, where Dij is the number of partitions in which
+            # vertices i and j of G are assigned to the same cluster, divided by nP.
+            d_matrix = self._get_clean_dict_graph()
+            for community in all_communities:
+                for comm in community:
+                    for k1, k2 in combinations(comm, r=2):
+                        if k2 not in d_matrix[k1]:
+                            d_matrix[k1][k2] = {"weight": 1}
+                        d_matrix[k1][k2]["weight"] += 1
+
+            for k1, k2 in combinations(d_matrix.keys(), r=2):
+                d_matrix[k1][k2]["weight"] = d_matrix[k1][k2]["weight"] / self._settings["number_of_repetitions"]
+            # STEP 3 -  All entries of D below a chosen threshold τ are set to zero. TODO: Define threshold
+
+            # STEP 4 -  Apply algorithm on D nP times, so to yield nP partitions.
+            self._G = nx.Graph(d_matrix)
+            all_communities = []
+            for i in range(self._settings["number_of_repetitions"]):
+                self._initialize_labels()
+                self._algorithm()
+                all_communities.append(self._get_communities())
+                self._iterations = 0
+            self._reinitialise_attributes()
+
+            # STEP 4.1
+            new_d_matrix = self._get_clean_dict_graph()
+            for community in all_communities:
+                for comm in community:
+                    for k1, k2 in combinations(comm, r=2):
+                        if k2 not in new_d_matrix[k1]:
+                            new_d_matrix[k1][k2] = {"weight": 1}
+                        new_d_matrix[k1][k2]["weight"] += 1
+
+            # STEP 5 - If the partitions are all equal, stop (the consensus matrix would be block-diagonal).
+            # Otherwise go back to 2.
+            counter = 0
+            for key, val in new_d_matrix.items():
+                for key2, val2 in val.items():
+                    rez = val2["weight"] / self._settings["number_of_repetitions"]
+                    if 0 < rez < 1:
+                        counter += 1
+
+            if counter == 0:
+                print("ha")
+                break
 
     def _print_results_of_run(self):
         """
