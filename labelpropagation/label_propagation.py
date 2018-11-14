@@ -17,6 +17,7 @@ class LabelPropagation:
         self._G = nx.Graph()
         self._graph_type = graph_type
         self._initialize_graph_from_file(file_path)
+        self._orig_G = self._G
         self._label_map = {}
         self._iterations = 0
         self._final_number_of_groups = []
@@ -37,14 +38,14 @@ class LabelPropagation:
                 if self._graph_type == "U":
                     edges.append((line[0], line[1]))
                 elif self._graph_type == "W":
-                    edges.append((line[0], line[1], line[2]))
+                    edges.append((line[0], line[1], int(line[2])))
             if self._graph_type == "U":
                 self._G.add_edges_from(edges)
             elif self._graph_type == "W":
                 self._G.add_weighted_edges_from(edges)
 
     def run(self, label_resolution, equilibrium, order,
-            k=1, include_weights=False, draw=False, maximum_iterations=100):
+            number_of_repetitions=1, include_weights=False, draw=False, maximum_iterations=100):
         """
         Runs the algorithm once, and presents a drawing of the result.
         Usage:
@@ -62,7 +63,7 @@ class LabelPropagation:
             "label_ties_resolution": label_resolution,
             "label_equilibrium_criteria": equilibrium,
             "order_of_label_propagation": order,
-            "number_of_repetitions": k,
+            "number_of_repetitions": number_of_repetitions,
             "include_weights": include_weights,
             "draw": draw,
             "maximum_iterations": maximum_iterations,
@@ -87,7 +88,9 @@ class LabelPropagation:
             self._print_results_of_evaluate()
         self._reinitialise_attributes()
 
-    def consensus_clustering(self, label_resolution, equilibrium, order, maximum_iterations=100):
+    # TODO: Double check and test consensus clustering; Write down open questions
+    def consensus_clustering(self, label_resolution, equilibrium, order, threshold, draw=False,
+                             maximum_iterations=100):
         """
         Consensus clustering algorithm
         """
@@ -101,24 +104,33 @@ class LabelPropagation:
             "label_ties_resolution": label_resolution,
             "label_equilibrium_criteria": equilibrium,
             "order_of_label_propagation": order,
+            "threshold": threshold,
+            "draw": draw,
             "maximum_iterations": maximum_iterations,
             "include_weights": True,
-            "number_of_repetitions": len(self._G),
+            "number_of_repetitions": 1,
+            "number_of_nodes": len(self._G),
         }
 
         # STEP 1 - Apply algorithm on G nP times, so to yield nP partitions.
         all_communities = []
-        for i in range(self._settings["number_of_repetitions"]):
+        for i in range(self._settings["number_of_nodes"]):
             self._initialize_labels()
             self._algorithm()
             all_communities.append(self._get_communities())
             self._iterations = 0
         self._reinitialise_attributes()
 
+        d_matrix = None
+        new_d_matrix = None
+
         while True:
             # STEP 2 - Compute the consensus matrix D, where Dij is the number of partitions in which
             # vertices i and j of G are assigned to the same cluster, divided by nP.
-            d_matrix = self._get_clean_dict_graph()
+            if d_matrix:
+                d_matrix = self._reset_d_matrix(d_matrix)
+            else:
+                d_matrix = self._get_clean_d_matrix(self._G.__dict__["_adj"])
             for community in all_communities:
                 for comm in community:
                     for k1, k2 in combinations(comm, r=2):
@@ -126,14 +138,20 @@ class LabelPropagation:
                             d_matrix[k1][k2] = {"weight": 1}
                         d_matrix[k1][k2]["weight"] += 1
 
-            for k1, k2 in combinations(d_matrix.keys(), r=2):
-                d_matrix[k1][k2]["weight"] = d_matrix[k1][k2]["weight"] / self._settings["number_of_repetitions"]
             # STEP 3 -  All entries of D below a chosen threshold τ are set to zero. TODO: Define threshold
+            for k1, k2 in combinations(d_matrix.keys(), r=2):
+                if k2 in d_matrix[k1] and d_matrix[k1][k2]["weight"] != 0:
+                    # divide by nP
+                    d_ij = d_matrix[k1][k2]["weight"] / self._settings["number_of_nodes"]
+                    if d_ij < self._settings["threshold"]:
+                        d_matrix[k1][k2]["weight"] = 0
+                    else:
+                        d_matrix[k1][k2]["weight"] = d_ij
 
             # STEP 4 -  Apply algorithm on D nP times, so to yield nP partitions.
             self._G = nx.Graph(d_matrix)
             all_communities = []
-            for i in range(self._settings["number_of_repetitions"]):
+            for i in range(self._settings["number_of_nodes"]):
                 self._initialize_labels()
                 self._algorithm()
                 all_communities.append(self._get_communities())
@@ -141,7 +159,10 @@ class LabelPropagation:
             self._reinitialise_attributes()
 
             # STEP 4.1
-            new_d_matrix = self._get_clean_dict_graph()
+            if new_d_matrix:
+                new_d_matrix = self._reset_d_matrix(new_d_matrix)
+            else:
+                new_d_matrix = self._get_clean_d_matrix(d_matrix)
             for community in all_communities:
                 for comm in community:
                     for k1, k2 in combinations(comm, r=2):
@@ -151,16 +172,10 @@ class LabelPropagation:
 
             # STEP 5 - If the partitions are all equal, stop (the consensus matrix would be block-diagonal).
             # Otherwise go back to 2.
-            counter = 0
-            for key, val in new_d_matrix.items():
-                for key2, val2 in val.items():
-                    rez = val2["weight"] / self._settings["number_of_repetitions"]
-                    if 0 < rez < 1:
-                        counter += 1
-
-            if counter == 0:
-                print("ha")
+            if self._is_block_diagonal(new_d_matrix):
+                self._G = nx.Graph(new_d_matrix)
                 break
+        self._draw_graph()
 
     def _print_results_of_run(self):
         """
@@ -200,12 +215,30 @@ class LabelPropagation:
         self._runtime_list = []
         self._iteration_list = []
 
-    def _get_clean_dict_graph(self):
-        x = copy.deepcopy(self._G.__dict__["_adj"])
-        for key, val in x.items():
+    def _is_block_diagonal(self, new_d_matrix):
+        for k1, k2 in combinations(new_d_matrix.keys(), r=2):
+            if k2 in new_d_matrix[k1]:
+                new_d_ij = new_d_matrix[k1][k2]["weight"] / self._settings["number_of_nodes"]
+                if 0 < new_d_ij < 1:
+                    return False
+                else:
+                    new_d_matrix[k1][k2]["weight"] = new_d_ij
+        return True
+
+    @staticmethod
+    def _get_clean_d_matrix(input_dict):
+        temp_dict = copy.deepcopy(input_dict)
+        for key, val in temp_dict.items():
             for key2, val2 in val.items():
                 val2["weight"] = 0
-        return x
+        return temp_dict
+
+    @staticmethod
+    def _reset_d_matrix(input_dict):
+        for key, val in input_dict.items():
+            for key2, val2 in val.items():
+                val2["weight"] = 0
+        return input_dict
 
     def _get_communities(self):
         community_set = set(self._label_map.values())
@@ -279,7 +312,7 @@ class LabelPropagation:
 
         weights = {self._label_map[adj]: 0 for adj in self._G[node].keys()}
         for adj in self._G[node].keys():
-            weights[self._label_map[adj]] = weights[self._label_map[adj]] + int(self._G[node][adj]["weight"])
+            weights[self._label_map[adj]] = weights[self._label_map[adj]] + self._G[node][adj]["weight"]
         max_value = max(weights.values())
         weight_count_dict = {key: max_value for key in weights.keys() if weights[key] == max_value}
 
