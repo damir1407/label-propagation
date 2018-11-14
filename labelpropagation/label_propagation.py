@@ -112,6 +112,8 @@ class LabelPropagation:
             "number_of_nodes": len(self._G),
         }
 
+        start_time = time.clock()
+
         # STEP 1 - Apply algorithm on G nP times, so to yield nP partitions.
         all_communities = []
         for i in range(self._settings["number_of_nodes"]):
@@ -175,6 +177,10 @@ class LabelPropagation:
             if self._is_block_diagonal(new_d_matrix):
                 self._G = nx.Graph(new_d_matrix)
                 break
+        self._runtime_list.append(time.clock() - start_time)
+        self._iteration_list.append(0)
+        self._final_number_of_groups.append(self._get_number_of_communities())
+        self._print_results_of_run()
         self._draw_graph()
 
     def _print_results_of_run(self):
