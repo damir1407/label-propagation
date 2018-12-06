@@ -263,8 +263,8 @@ class LabelPropagation:
         """
         Initialization of graph labels.
         """
-        for i, node in enumerate(self._G.nodes()):
-            self._label_map[node] = i
+        for label, node in enumerate(self._G.nodes()):
+            self._label_map[node] = label
 
     def _draw_graph(self):
         """
@@ -286,28 +286,28 @@ class LabelPropagation:
         labels = [self._label_map[adj] for adj in self._G[node].keys()]
         label_count = Counter(labels)
         max_value = max(label_count.values())
-        label_count_dict = {key: max_value for key in label_count.keys() if label_count[key] == max_value}
+        max_value_label_count = {key: max_value for key in label_count.keys() if label_count[key] == max_value}
 
-        if len(label_count_dict) == 1:
-            return list(label_count_dict.keys())[0]
+        if len(max_value_label_count) == 1:
+            return list(max_value_label_count.keys())[0]
         elif self._settings["label_ties_resolution"] == "random":
-            return random.choice(list(label_count_dict.keys()))
+            return random.choice(list(max_value_label_count.keys()))
         elif self._settings["label_ties_resolution"] == "inclusion":
-            if self._label_map[node] in label_count_dict.keys():
+            if self._label_map[node] in max_value_label_count.keys():
                 return self._label_map[node]
             elif self._label_map[node] in label_count:
                 if max_value - label_count[self._label_map[node]] > 1:
-                    return random.choice(list(label_count_dict.keys()))
+                    return random.choice(list(max_value_label_count.keys()))
                 else:
-                    label_count_dict[self._label_map[node]] = max_value
-                    return random.choice(list(label_count_dict.keys()))
+                    max_value_label_count[self._label_map[node]] = max_value
+                    return random.choice(list(max_value_label_count.keys()))
             else:
-                return random.choice(list(label_count_dict.keys()))
+                return random.choice(list(max_value_label_count.keys()))
         elif self._settings["label_ties_resolution"] == "retention":
-            if self._label_map[node] in label_count_dict.keys():
+            if self._label_map[node] in max_value_label_count.keys():
                 return self._label_map[node]
             else:
-                return random.choice(list(label_count_dict.keys()))
+                return random.choice(list(max_value_label_count.keys()))
 
     def _maximal_neighbouring_weight(self, node):
         """
@@ -320,17 +320,17 @@ class LabelPropagation:
         for adj in self._G[node].keys():
             weights[self._label_map[adj]] = weights[self._label_map[adj]] + self._G[node][adj]["weight"]
         max_value = max(weights.values())
-        weight_count_dict = {key: max_value for key in weights.keys() if weights[key] == max_value}
+        max_value_weight_count = {key: max_value for key in weights.keys() if weights[key] == max_value}
 
-        if len(weight_count_dict) == 1:
-            return list(weight_count_dict.keys())[0]
+        if len(max_value_weight_count) == 1:
+            return list(max_value_weight_count.keys())[0]
         elif self._settings["label_ties_resolution"] in ["random", "inclusion"]:
-            return random.choice(list(weight_count_dict.keys()))
+            return random.choice(list(max_value_weight_count.keys()))
         elif self._settings["label_ties_resolution"] == "retention":
-            if self._label_map[node] in weight_count_dict.keys():
+            if self._label_map[node] in max_value_weight_count.keys():
                 return self._label_map[node]
             else:
-                return random.choice(list(weight_count_dict.keys()))
+                return random.choice(list(max_value_weight_count.keys()))
 
     def _convergence(self):
         """
@@ -339,26 +339,26 @@ class LabelPropagation:
         if self._settings["label_equilibrium_criteria"] not in ["label-equilibrium", "strong-community"]:
             raise ValueError("Invalid label equilibrium criteria parameter")
 
-        # TODO: Double check this
+        # TODO: Double check label-equilibrium criteria
         for node in self._G.nodes():
             labels = [self._label_map[adj] for adj in self._G[node].keys()]
             label_count = Counter(labels)
             max_value = max(label_count.values())
-            label_count_dict = {key: max_value for key in label_count.keys() if label_count[key] == max_value}
+            max_value_label_count = {key: max_value for key in label_count.keys() if label_count[key] == max_value}
 
-            if len(label_count_dict) > 1:
+            if len(max_value_label_count) > 1:
                 if self._settings["label_equilibrium_criteria"] == "label-equilibrium":
                     continue
                 elif self._settings["label_equilibrium_criteria"] == "strong-community":
                     return True
-            if self._label_map[node] != list(label_count_dict.keys())[0]:
+            if self._label_map[node] != list(max_value_label_count.keys())[0]:
                 return True
         return False
 
     def _asynchronous_propagation(self):
         change = False
         for node in random.sample(self._G.nodes(), len(self._G.nodes())):
-            if self._settings["include_weights"] is True:
+            if self._settings["include_weights"]:
                 new_label = self._maximal_neighbouring_weight(node)
             else:
                 new_label = self._maximal_neighbouring_label(node)
@@ -371,7 +371,7 @@ class LabelPropagation:
         change = False
         sync_label_map = copy.deepcopy(self._label_map)
         for node in random.sample(self._G.nodes(), len(self._G.nodes())):
-            if self._settings["include_weights"] is True:
+            if self._settings["include_weights"]:
                 new_label = self._maximal_neighbouring_weight(node)
             else:
                 new_label = self._maximal_neighbouring_label(node)
