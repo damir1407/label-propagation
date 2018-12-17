@@ -2,7 +2,6 @@ from collections import Counter
 from itertools import combinations
 import networkx as nx
 import matplotlib.pyplot as plt
-import numpy as np
 import random
 import time
 import copy
@@ -181,7 +180,7 @@ class LabelPropagation:
         """
         Drawing the image of the graph.
         """
-        if len(self._G.nodes()) < 50:
+        if len(self._G.nodes()) < 100:
             colors = [self._label_map.get(node) for node in self._G.nodes()]
             plt.subplot(111)
             nx.draw(self._G, with_labels=self._G.nodes, node_color=colors)
@@ -199,16 +198,16 @@ class LabelPropagation:
         else:
             return random.choice(list(max_value_label_count.keys()))
 
-    def _retention(self, node, max_value_label_count):
-        if self._label_map[node] in max_value_label_count.keys():
+    def _retention(self, node, max_value_count):
+        if self._label_map[node] in max_value_count.keys():
             return self._label_map[node]
         else:
-            return random.choice(list(max_value_label_count.keys()))
+            return random.choice(list(max_value_count.keys()))
 
     # TODO: Double check this
     def _maximal_neighbouring_label(self, node):
         """
-        Algorithm help function, which finds the maximal neighbouring label based on the label_ties_resolution string.
+        Algorithm function, which finds the maximal neighbouring label based on the label_ties_resolution string.
         """
         if self._settings["label_ties_resolution"] not in ["random", "inclusion", "retention"]:
             raise ValueError("Invalid label ties resolution parameter")
@@ -229,7 +228,7 @@ class LabelPropagation:
 
     def _maximal_neighbouring_weight(self, node):
         """
-        Algorithm help function, which finds the maximal neighbouring label based on the neighbouring weights.
+        Algorithm function, which finds the maximal neighbouring label based on the neighbouring weights.
         """
         if self._settings["label_ties_resolution"] not in ["random", "inclusion", "retention"]:
             raise ValueError("Invalid label ties resolution parameter")
@@ -245,14 +244,11 @@ class LabelPropagation:
         elif self._settings["label_ties_resolution"] in ["random", "inclusion"]:
             return random.choice(list(max_value_weight_count.keys()))
         elif self._settings["label_ties_resolution"] == "retention":
-            if self._label_map[node] in max_value_weight_count.keys():
-                return self._label_map[node]
-            else:
-                return random.choice(list(max_value_weight_count.keys()))
+            return self._retention(node, max_value_weight_count)
 
     def _convergence(self):
         """
-        Algorithm help function, which affects convergence based on label_equilibrium_criteria string.
+        Algorithm function for convergence based on label_equilibrium_criteria string.
         """
         if self._settings["label_equilibrium_criteria"] not in ["label-equilibrium", "strong-community"]:
             raise ValueError("Invalid label equilibrium criteria parameter")
@@ -269,7 +265,7 @@ class LabelPropagation:
                     continue
                 elif self._settings["label_equilibrium_criteria"] == "strong-community":
                     return True
-            if self._label_map[node] != list(max_value_label_count.keys())[0]:
+            elif self._label_map[node] != list(max_value_label_count.keys())[0]:
                 return True
         return False
 
