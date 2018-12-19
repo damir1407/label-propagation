@@ -158,6 +158,7 @@ class LabelPropagation:
                 for node1, node2 in combinations(members, r=2):
                     if node2 not in d_matrix[node1]:
                         d_matrix[node1][node2] = {"weight": 1}
+                        d_matrix[node2][node1] = {"weight": 1}
                     else:
                         d_matrix[node1][node2]["weight"] += 1
         return d_matrix
