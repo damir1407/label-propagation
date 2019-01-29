@@ -1,6 +1,6 @@
 from labelpropagation.label_propagation import LabelPropagation
 
-lp = LabelPropagation("input-examples/ucidata-zachary/out.ucidata-zachary", "U")
+lp = LabelPropagation("input-examples/dolphins/out.dolphins", "U")
 lp.draw_graph()
 
 number_of_communities = lp.run(label_resolution="retention", equilibrium="change", order="asynchronous", weighted=False)

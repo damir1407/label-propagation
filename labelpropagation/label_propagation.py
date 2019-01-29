@@ -99,26 +99,15 @@ class LabelPropagation:
                     del d_matrix[node1][node2]
                     del d_matrix[node2][node1]
 
+        if self._is_block_diagonal(d_matrix):
+            return
+
         self._graph = nx.Graph(d_matrix)
         found_communities = []
         for i in range(self._settings["number_of_partitions"]):
             self._init_labels()
             self._algorithm()
             found_communities.append(self._get_communities())
-
-        new_d_matrix = self._get_clean_d_matrix(d_matrix)
-        new_d_matrix = self._compute_d_matrix(new_d_matrix, found_communities)
-
-        # TODO: NOVO PROVJERI
-        for node1, node2 in combinations(new_d_matrix.keys(), r=2):
-            if node2 in new_d_matrix[node1]:
-                if new_d_matrix[node1][node2]["weight"] < self._settings["threshold"]:
-                    del new_d_matrix[node1][node2]
-                    del new_d_matrix[node2][node1]
-
-        self._graph = nx.Graph(new_d_matrix)
-        if self._is_block_diagonal(new_d_matrix):
-            return
 
         self._recursive_steps += 1
         self.recursive(self._graph.__dict__["_adj"], found_communities)
