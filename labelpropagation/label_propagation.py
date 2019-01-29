@@ -1,7 +1,6 @@
 from collections import Counter
 from itertools import combinations
 import networkx as nx
-import matplotlib.pyplot as plt
 import random
 import copy
 import warnings
@@ -10,7 +9,7 @@ import warnings
 class LabelPropagation:
     def __init__(self, file_path, graph_type="U"):
         self._graph_type = graph_type
-        self._graph = self._init_graph_from_file(file_path)
+        self.graph = self._init_graph_from_file(file_path)
         self._label_map = {}
         self._settings = {}
         self._recursive_steps = None
@@ -51,7 +50,7 @@ class LabelPropagation:
 
         self._init_labels()
         self._algorithm()
-        return len(Counter(self._label_map.values()))
+        return self._label_map
 
     def consensus_clustering(self, label_resolution, equilibrium, order, threshold, number_of_partitions,
                              recursive_steps=10, weighted=False, maximum_iterations=100):
@@ -82,8 +81,8 @@ class LabelPropagation:
 
         self._settings["weighted"] = True
         self._recursive_steps = 0
-        self.recursive(self._graph.__dict__["_adj"], found_communities)
-        return len(Counter(self._label_map.values()))
+        self.recursive(self.graph.__dict__["_adj"], found_communities)
+        return self._label_map
 
     def recursive(self, matrix, found_communities):
         if self._recursive_steps == self._settings["recursive_steps"]:
@@ -102,7 +101,7 @@ class LabelPropagation:
         if self._is_block_diagonal(d_matrix):
             return
 
-        self._graph = nx.Graph(d_matrix)
+        self.graph = nx.Graph(d_matrix)
         found_communities = []
         for i in range(self._settings["number_of_partitions"]):
             self._init_labels()
@@ -110,7 +109,7 @@ class LabelPropagation:
             found_communities.append(self._get_communities())
 
         self._recursive_steps += 1
-        self.recursive(self._graph.__dict__["_adj"], found_communities)
+        self.recursive(self.graph.__dict__["_adj"], found_communities)
         return
 
     def _is_block_diagonal(self, new_d_matrix):
@@ -147,15 +146,8 @@ class LabelPropagation:
         return community_dict.values()
 
     def _init_labels(self):
-        for label, node in enumerate(self._graph.nodes()):
+        for label, node in enumerate(self.graph.nodes()):
             self._label_map[node] = label
-
-    def draw_graph(self):
-        if len(self._graph.nodes()) < 100:
-            colors = [self._label_map.get(node) for node in self._graph.nodes()]
-            plt.subplot(111)
-            nx.draw(self._graph, with_labels=self._graph.nodes, node_color=colors)
-            plt.show()
 
     def _inclusion(self, node, label_count, max_value_label_count, max_value):
         if self._label_map[node] in max_value_label_count.keys():
@@ -179,7 +171,7 @@ class LabelPropagation:
         if self._settings["label_ties_resolution"] not in ["random", "inclusion", "retention"]:
             raise ValueError("Invalid label ties resolution parameter")
 
-        labels = [self._label_map[adj] for adj in self._graph[node].keys()]
+        labels = [self._label_map[adj] for adj in self.graph[node].keys()]
         label_count = Counter(labels)
         max_value = max(label_count.values())
         max_value_label_count = {key: max_value for key in label_count.keys() if label_count[key] == max_value}
@@ -197,9 +189,9 @@ class LabelPropagation:
         if self._settings["label_ties_resolution"] not in ["random", "inclusion", "retention"]:
             raise ValueError("Invalid label ties resolution parameter")
 
-        weights = {self._label_map[adj]: 0 for adj in self._graph[node].keys()}
-        for adj in self._graph[node].keys():
-            weights[self._label_map[adj]] = weights[self._label_map[adj]] + self._graph[node][adj]["weight"]
+        weights = {self._label_map[adj]: 0 for adj in self.graph[node].keys()}
+        for adj in self.graph[node].keys():
+            weights[self._label_map[adj]] = weights[self._label_map[adj]] + self.graph[node][adj]["weight"]
         max_value = max(weights.values())
         max_value_weight_count = {key: max_value for key in weights.keys() if weights[key] == max_value}
 
@@ -214,8 +206,8 @@ class LabelPropagation:
         if self._settings["label_equilibrium_criteria"] not in ["label-equilibrium", "strong-community"]:
             raise ValueError("Invalid label equilibrium criteria parameter")
 
-        for node in self._graph.nodes():
-            labels = [self._label_map[adj] for adj in self._graph[node].keys()]
+        for node in self.graph.nodes():
+            labels = [self._label_map[adj] for adj in self.graph[node].keys()]
             label_count = Counter(labels)
             max_value = max(label_count.values())
             max_value_label_count = {key: max_value for key in label_count.keys() if label_count[key] == max_value}
@@ -231,7 +223,7 @@ class LabelPropagation:
 
     def _asynchronous_propagation(self):
         change = False
-        for node in random.sample(self._graph.nodes(), len(self._graph.nodes())):
+        for node in random.sample(self.graph.nodes(), len(self.graph.nodes())):
             if self._settings["weighted"]:
                 new_label = self._maximal_neighbouring_weight(node)
             else:
@@ -244,7 +236,7 @@ class LabelPropagation:
     def _synchronous_propagation(self):
         change = False
         sync_label_map = copy.deepcopy(self._label_map)
-        for node in random.sample(self._graph.nodes(), len(self._graph.nodes())):
+        for node in random.sample(self.graph.nodes(), len(self.graph.nodes())):
             if self._settings["weighted"]:
                 new_label = self._maximal_neighbouring_weight(node)
             else:
