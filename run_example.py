@@ -11,7 +11,7 @@ def draw_graph(graph, label_map):
     plt.show()
 
 
-lp = LabelPropagation("input-examples/dolphins/out.dolphins", "U")
+lp = LabelPropagation("data/dolphins/out.dolphins", "U")
 
 labels = lp.run(label_resolution="retention", equilibrium="change", order="asynchronous", weighted=False)
 draw_graph(lp.graph, labels)
