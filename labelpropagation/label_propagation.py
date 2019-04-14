@@ -50,6 +50,14 @@ class LabelPropagation:
 
         self._init_labels()
         self._algorithm()
+        """
+        communities = self._get_communities()
+        for community in communities:
+            print(community)
+            for member in community:
+                self.dfs(member)
+                print()
+        """
         return self._label_map
 
     def consensus_clustering(self, label_resolution, equilibrium, order, threshold, number_of_partitions,
@@ -201,6 +209,33 @@ class LabelPropagation:
             return random.choice(list(max_value_weight_count.keys()))
         elif self._settings["label_ties_resolution"] == "retention":
             return self._retention(node, max_value_weight_count)
+
+    # A function used by DFS
+    def dfs_recursive(self, v, visited, community, rez):
+
+        visited[v] = True
+
+        for i in self.graph[v].keys():
+            if i in community and not visited[i]:
+                community.remove(i)
+                rez.append(i)
+                rez = self.dfs_recursive(i, visited, community, rez)
+        return rez
+
+    def dfs(self, communities):
+        result = []
+
+        for community in communities:
+            temp_community = copy.deepcopy(community)
+            # Mark all the vertices as not visited
+            visited = {member: False for member in community}
+            while len(temp_community) != 0:
+
+                v = random.choice(temp_community)
+                temp_community.remove(v)
+
+                result.append(self.dfs_recursive(v, visited, temp_community, [v]))
+        return result
 
     def _convergence(self):
         if self._settings["label_equilibrium_criteria"] not in ["label-equilibrium", "strong-community"]:

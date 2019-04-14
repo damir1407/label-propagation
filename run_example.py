@@ -1,5 +1,4 @@
 from labelpropagation.label_propagation import LabelPropagation
-from collections import Counter
 import matplotlib.pyplot as plt
 import networkx as nx
 
@@ -11,21 +10,32 @@ def draw_graph(graph, label_map):
     plt.show()
 
 
-lp = LabelPropagation("data/dolphins/out.dolphins", "U")
+def get_communities(labels):
+    community_set = set(labels.values())
+    community_dict = {value: [] for value in community_set}
+    for key, value in labels.items():
+        community_dict[value].append(key)
+    return community_dict.values()
 
-labels = lp.run(label_resolution="retention", equilibrium="change", order="asynchronous", weighted=False)
+
+lp = LabelPropagation("data/test", "U")
+
+# labels = lp.run(label_resolution="inclusion", equilibrium="label-equilibrium", order="asynchronous", weighted=False)
+# print(labels)
+labels = {'1': 0, '2': 0, '3': 0, '4': 1, '5': 0, '6': 0, '7': 0, '8': 1, '9': 1, '10': 1}
 draw_graph(lp.graph, labels)
 
-# TODO: Check if subnetworks of same label appear
-print(lp.graph.__dict__["_adj"])
-community_set = set(labels.values())
-community_dict = {value: [] for value in community_set}
-for key, value in labels.items():
-    community_dict[value].append(key)
-print(community_dict)
-print(Counter(labels.values()))
-print(len(Counter(labels.values())))
+communities = get_communities(labels)
+result = lp.dfs(communities)
+if len(result) > len(communities):
+    for index, community in enumerate(result):
+        for member in community:
+            labels[member] = index
+print(labels)
+draw_graph(lp.graph, labels)
 
+"""
 labels = lp.consensus_clustering(label_resolution="retention", equilibrium="change", order="asynchronous",
                                  threshold=6, number_of_partitions=12, weighted=False)
 draw_graph(lp.graph, labels)
+"""
