@@ -50,14 +50,15 @@ class LabelPropagation:
 
         self._init_labels()
         self._algorithm()
-        """
+
         communities = self._get_communities()
-        for community in communities:
-            print(community)
-            for member in community:
-                self.dfs(member)
-                print()
-        """
+        result = self.dfs(communities)
+        if len(result) > len(communities):
+            print("TRUE")
+            for index, community in enumerate(result):
+                for member in community:
+                    self._label_map[member] = index
+
         return self._label_map
 
     def consensus_clustering(self, label_resolution, equilibrium, order, threshold, number_of_partitions,
