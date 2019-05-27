@@ -1,6 +1,8 @@
 from labelpropagation.label_propagation import LabelPropagation
+from collections import Counter
 import matplotlib.pyplot as plt
 import networkx as nx
+import time
 
 
 def draw_graph(graph, label_map, title):
@@ -11,13 +13,17 @@ def draw_graph(graph, label_map, title):
     plt.show()
 
 
-lp = LabelPropagation("data/moreno_blogs/out.moreno_blogs_blogs", "U")
+lp = LabelPropagation("data/test", "U")
 
-labels = lp.run(label_resolution="retention", equilibrium="change", order="asynchronous", weighted=False)
-print(labels)
+start_time = time.time()
+labels = lp.run(label_resolution="random", equilibrium="change", order="asynchronous", weighted=False)
+print(time.time() - start_time)
+print(len(Counter(labels.values())))
 draw_graph(lp.graph, labels, "Label Propagation")
 
+start_time = time.time()
 labels = lp.consensus_clustering(label_resolution="retention", equilibrium="change", order="asynchronous",
                                  threshold=6, number_of_partitions=12, weighted=False)
-print(labels)
+print(time.time() - start_time)
+print(len(Counter(labels.values())))
 draw_graph(lp.graph, labels, "Consensus Clustering")

@@ -52,7 +52,7 @@ class LabelPropagation:
         self._algorithm()
 
         communities = self._get_communities()
-        result = self.dfs(communities)
+        result = self._dfs(communities)
         if len(result) > len(communities):
             print("TRUE")
             for index, community in enumerate(result):
@@ -158,72 +158,77 @@ class LabelPropagation:
         for label, node in enumerate(self.graph.nodes()):
             self._label_map[node] = label
 
-    def _inclusion(self, node, label_count, max_value_label_count, max_value):
-        if self._label_map[node] in max_value_label_count.keys():
+    def _inclusion(self, node, label_cnt_dict, max_labels, max_label_value):
+        if self._label_map[node] in max_labels:
             return self._label_map[node]
-        elif self._label_map[node] in label_count:
-            if max_value - label_count[self._label_map[node]] > 1:
-                return random.choice(list(max_value_label_count.keys()))
+        elif self._label_map[node] in label_cnt_dict:
+            if max_label_value - label_cnt_dict[self._label_map[node]] > 1:
+                return random.choice(max_labels)
             else:
-                max_value_label_count[self._label_map[node]] = max_value
-                return random.choice(list(max_value_label_count.keys()))
+                max_labels.append(self._label_map[node])
+                return random.choice(max_labels)
         else:
-            return random.choice(list(max_value_label_count.keys()))
+            return random.choice(max_labels)
 
-    def _retention(self, node, max_value_count):
-        if self._label_map[node] in max_value_count.keys():
+    def _retention(self, node, max_labels):
+        if self._label_map[node] in max_labels:
             return self._label_map[node]
         else:
-            return random.choice(list(max_value_count.keys()))
+            return random.choice(max_labels)
 
     def _maximal_neighbouring_label(self, node):
         if self._settings["label_ties_resolution"] not in ["random", "inclusion", "retention"]:
             raise ValueError("Invalid label ties resolution parameter")
 
         labels = [self._label_map[adj] for adj in self.graph[node].keys()]
-        label_count = Counter(labels)
-        max_value = max(label_count.values())
-        max_value_label_count = {key: max_value for key in label_count.keys() if label_count[key] == max_value}
+        label_cnt_dict = Counter(labels)
+        max_label_value = max(label_cnt_dict.values())
+        max_label_cnt = {key: max_label_value for key in label_cnt_dict.keys() if
+                         label_cnt_dict[key] == max_label_value}
+        max_labels = list(max_label_cnt.keys())
 
-        if len(max_value_label_count) == 1:
-            return list(max_value_label_count.keys())[0]
+        if len(max_labels) == 1:
+            return max_labels[0]
         elif self._settings["label_ties_resolution"] == "random":
-            return random.choice(list(max_value_label_count.keys()))
+            return random.choice(max_labels)
         elif self._settings["label_ties_resolution"] == "inclusion":
-            return self._inclusion(node, label_count, max_value_label_count, max_value)
+            return self._inclusion(node, label_cnt_dict, max_labels, max_label_value)
         elif self._settings["label_ties_resolution"] == "retention":
-            return self._retention(node, max_value_label_count)
+            return self._retention(node, max_labels)
 
     def _maximal_neighbouring_weight(self, node):
         if self._settings["label_ties_resolution"] not in ["random", "inclusion", "retention"]:
             raise ValueError("Invalid label ties resolution parameter")
 
-        weights = {self._label_map[adj]: 0 for adj in self.graph[node].keys()}
+        weights = {}
         for adj in self.graph[node].keys():
-            weights[self._label_map[adj]] = weights[self._label_map[adj]] + self.graph[node][adj]["weight"]
-        max_value = max(weights.values())
-        max_value_weight_count = {key: max_value for key in weights.keys() if weights[key] == max_value}
+            if self._label_map[adj] in weights:
+                weights[self._label_map[adj]] += self.graph[node][adj]["weight"]
+            else:
+                weights[self._label_map[adj]] = self.graph[node][adj]["weight"]
+        max_weight_value = max(weights.values())
+        max_weight_cnt = {key: max_weight_value for key in weights.keys() if weights[key] == max_weight_value}
+        max_weights = list(max_weight_cnt.keys())
 
-        if len(max_value_weight_count) == 1:
-            return list(max_value_weight_count.keys())[0]
+        if len(max_weights) == 1:
+            return max_weights[0]
         elif self._settings["label_ties_resolution"] in ["random", "inclusion"]:
-            return random.choice(list(max_value_weight_count.keys()))
+            return random.choice(max_weights)
         elif self._settings["label_ties_resolution"] == "retention":
-            return self._retention(node, max_value_weight_count)
+            return self._retention(node, max_weights)
 
     # A function used by DFS
-    def dfs_recursive(self, v, visited, community, rez):
-
+    def _dfs_recursive(self, v, visited, community, rez):
         visited[v] = True
 
         for i in self.graph[v].keys():
             if i in community and not visited[i]:
                 community.remove(i)
                 rez.append(i)
-                rez = self.dfs_recursive(i, visited, community, rez)
+                rez = self._dfs_recursive(i, visited, community, rez)
         return rez
 
-    def dfs(self, communities):
+    def _dfs(self, communities):
         result = []
 
         for community in communities:
@@ -235,7 +240,7 @@ class LabelPropagation:
                 v = random.choice(temp_community)
                 temp_community.remove(v)
 
-                result.append(self.dfs_recursive(v, visited, temp_community, [v]))
+                result.append(self._dfs_recursive(v, visited, temp_community, [v]))
         return result
 
     def _convergence(self):
@@ -244,16 +249,18 @@ class LabelPropagation:
 
         for node in self.graph.nodes():
             labels = [self._label_map[adj] for adj in self.graph[node].keys()]
-            label_count = Counter(labels)
-            max_value = max(label_count.values())
-            max_value_label_count = {key: max_value for key in label_count.keys() if label_count[key] == max_value}
+            label_cnt_dict = Counter(labels)
+            max_label_value = max(label_cnt_dict.values())
+            max_label_cnt = {key: max_label_value for key in label_cnt_dict.keys() if
+                             label_cnt_dict[key] == max_label_value}
+            max_labels = list(max_label_cnt.keys())
 
-            if len(max_value_label_count) > 1:
+            if len(max_labels) > 1:
                 if self._settings["label_equilibrium_criteria"] == "label-equilibrium":
                     continue
                 elif self._settings["label_equilibrium_criteria"] == "strong-community":
                     return True
-            elif self._label_map[node] != list(max_value_label_count.keys())[0]:
+            elif self._label_map[node] != max_labels[0]:
                 return True
         return False
 
