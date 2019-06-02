@@ -4,6 +4,7 @@ import networkx as nx
 import random
 import copy
 import warnings
+import numpy as np
 
 
 class LabelPropagation:
@@ -52,9 +53,9 @@ class LabelPropagation:
         self._algorithm()
 
         communities = self._get_communities()
-        result = self._dfs(communities)
+        result = self._dfs_connectivity(communities)
         if len(result) > len(communities):
-            print("TRUE")
+            print("Disconnected communities found!")
             for index, community in enumerate(result):
                 for member in community:
                     self._label_map[member] = index
@@ -93,13 +94,13 @@ class LabelPropagation:
         self.recursive(self.graph.__dict__["_adj"], found_communities)
         return self._label_map
 
-    def recursive(self, matrix, found_communities):
+    def recursive(self, adjacency_matrix, found_communities):
         if self._recursive_steps == self._settings["recursive_steps"]:
             print("Reached maximum recursive steps")
             return
 
-        d_matrix = self._get_clean_d_matrix(matrix)
-        d_matrix = self._compute_d_matrix(d_matrix, found_communities)
+        clean_d_matrix = self._get_clean_d_matrix(adjacency_matrix)
+        d_matrix = self._compute_d_matrix(clean_d_matrix, found_communities)
 
         for node1, node2 in combinations(d_matrix.keys(), r=2):
             if node2 in d_matrix[node1]:
@@ -107,10 +108,10 @@ class LabelPropagation:
                     del d_matrix[node1][node2]
                     del d_matrix[node2][node1]
 
+        self.graph = nx.Graph(d_matrix)
         if self._is_block_diagonal(d_matrix):
             return
 
-        self.graph = nx.Graph(d_matrix)
         found_communities = []
         for i in range(self._settings["number_of_partitions"]):
             self._init_labels()
@@ -129,30 +130,35 @@ class LabelPropagation:
         return True
 
     @staticmethod
-    def _get_clean_d_matrix(input_dict):
-        for key, val in input_dict.items():
+    def _get_clean_d_matrix(input_matrix):
+        d = {}
+        for key, val in input_matrix.items():
+            d[key] = {}
             for key2, val2 in val.items():
-                val2["weight"] = 0
-        return input_dict
+                d[key][key2] = {}
+                d[key][key2]["weight"] = 0
+        return d
 
     @staticmethod
     def _compute_d_matrix(d_matrix, found_communities):
+        d_copy = copy.deepcopy(d_matrix)
         for community in found_communities:
             for members in community:
                 for node1, node2 in combinations(members, r=2):
-                    if node2 not in d_matrix[node1]:
-                        d_matrix[node1][node2] = {"weight": 1}
-                        d_matrix[node2][node1] = {"weight": 1}
+                    if node2 not in d_copy[node1]:
+                        d_copy[node1][node2] = {"weight": 1}
+                        d_copy[node2][node1] = {"weight": 1}
                     else:
-                        d_matrix[node1][node2]["weight"] += 1
-        return d_matrix
+                        d_copy[node1][node2]["weight"] += 1
+                        d_copy[node2][node1]["weight"] += 1
+        return d_copy
 
     def _get_communities(self):
-        community_set = set(self._label_map.values())
-        community_dict = {value: [] for value in community_set}
-        for key, value in self._label_map.items():
-            community_dict[value].append(key)
-        return community_dict.values()
+        unique_community_labels = set(self._label_map.values())
+        unique_communities_by_label = {value: [] for value in unique_community_labels}
+        for node, label in self._label_map.items():
+            unique_communities_by_label[label].append(node)
+        return unique_communities_by_label.values()
 
     def _init_labels(self):
         for label, node in enumerate(self.graph.nodes()):
@@ -181,11 +187,19 @@ class LabelPropagation:
             raise ValueError("Invalid label ties resolution parameter")
 
         labels = [self._label_map[adj] for adj in self.graph[node].keys()]
+        unique, counts = np.unique(np.array(labels), return_counts=True)
+        label_cnt_dict = dict(zip(unique, counts))
+        max_label_value = np.max(counts)
+        max_labels = unique[np.argwhere(counts == np.amax(counts)).flatten()].tolist()
+
+        """
+        labels = [self._label_map[adj] for adj in self.graph[node].keys()]
         label_cnt_dict = Counter(labels)
         max_label_value = max(label_cnt_dict.values())
         max_label_cnt = {key: max_label_value for key in label_cnt_dict.keys() if
                          label_cnt_dict[key] == max_label_value}
         max_labels = list(max_label_cnt.keys())
+        """
 
         if len(max_labels) == 1:
             return max_labels[0]
@@ -218,29 +232,26 @@ class LabelPropagation:
             return self._retention(node, max_weights)
 
     # A function used by DFS
-    def _dfs_recursive(self, v, visited, community, rez):
+    def _dfs_recursive(self, v, visited, community, connected_group):
         visited[v] = True
 
         for i in self.graph[v].keys():
             if i in community and not visited[i]:
                 community.remove(i)
-                rez.append(i)
-                rez = self._dfs_recursive(i, visited, community, rez)
-        return rez
+                connected_group.append(i)
+                connected_group = self._dfs_recursive(i, visited, community, connected_group)
+        return connected_group
 
-    def _dfs(self, communities):
+    def _dfs_connectivity(self, communities):
         result = []
 
         for community in communities:
-            temp_community = copy.deepcopy(community)
-            # Mark all the vertices as not visited
+            community_copy = copy.deepcopy(community)
             visited = {member: False for member in community}
-            while len(temp_community) != 0:
-
-                v = random.choice(temp_community)
-                temp_community.remove(v)
-
-                result.append(self._dfs_recursive(v, visited, temp_community, [v]))
+            while len(community_copy) != 0:
+                v = random.choice(community_copy)
+                community_copy.remove(v)
+                result.append(self._dfs_recursive(v, visited, community_copy, [v]))
         return result
 
     def _convergence(self):
@@ -249,11 +260,8 @@ class LabelPropagation:
 
         for node in self.graph.nodes():
             labels = [self._label_map[adj] for adj in self.graph[node].keys()]
-            label_cnt_dict = Counter(labels)
-            max_label_value = max(label_cnt_dict.values())
-            max_label_cnt = {key: max_label_value for key in label_cnt_dict.keys() if
-                             label_cnt_dict[key] == max_label_value}
-            max_labels = list(max_label_cnt.keys())
+            unique, counts = np.unique(np.array(labels), return_counts=True)
+            max_labels = unique[np.argwhere(counts == np.amax(counts)).flatten()].tolist()
 
             if len(max_labels) > 1:
                 if self._settings["label_equilibrium_criteria"] == "label-equilibrium":

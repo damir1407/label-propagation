@@ -13,10 +13,10 @@ def draw_graph(graph, label_map, title):
     plt.show()
 
 
-lp = LabelPropagation("data/test", "U")
+lp = LabelPropagation("data/dolphins/out.dolphins", "U")
 
 start_time = time.time()
-labels = lp.run(label_resolution="random", equilibrium="change", order="asynchronous", weighted=False)
+labels = lp.run(label_resolution="random", equilibrium="strong-community", order="asynchronous", weighted=False)
 print(time.time() - start_time)
 print(len(Counter(labels.values())))
 draw_graph(lp.graph, labels, "Label Propagation")
