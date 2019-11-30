@@ -1,4 +1,3 @@
-from collections import Counter
 from itertools import combinations
 import networkx as nx
 import random
@@ -10,13 +9,13 @@ import numpy as np
 class LabelPropagation:
     def __init__(self, file_path, graph_type="U"):
         self._graph_type = graph_type
-        self.graph = self._init_graph_from_file(file_path)
-        self._label_map = {}
+        self._graph = self._initialize_graph_from_file(file_path)
+        self._node_labels = {}
         self._settings = {}
         self._recursive_steps = None
-        self._init_labels()
+        self._initialize_labels()
 
-    def _init_graph_from_file(self, file_path):
+    def _initialize_graph_from_file(self, file_path):
         new_graph = nx.Graph()
         with open(file_path, "rt") as f:
             edges = []
@@ -49,7 +48,7 @@ class LabelPropagation:
             "maximum_iterations": maximum_iterations,
         }
 
-        self._init_labels()
+        self._initialize_labels()
         self._algorithm()
 
         communities = self._get_communities()
@@ -58,9 +57,9 @@ class LabelPropagation:
             print("Disconnected communities found!")
             for index, community in enumerate(result):
                 for member in community:
-                    self._label_map[member] = index
+                    self._node_labels[member] = index
 
-        return self._label_map
+        return self._graph, self._node_labels
 
     def consensus_clustering(self, label_resolution, equilibrium, order, threshold, number_of_partitions,
                              recursive_steps=10, weighted=False, maximum_iterations=100):
@@ -85,16 +84,16 @@ class LabelPropagation:
 
         found_communities = []
         for i in range(self._settings["number_of_partitions"]):
-            self._init_labels()
+            self._initialize_labels()
             self._algorithm()
             found_communities.append(self._get_communities())
 
         self._settings["weighted"] = True
         self._recursive_steps = 0
-        self.recursive(self.graph.__dict__["_adj"], found_communities)
-        return self._label_map
+        self._recursive(self._graph.__dict__["_adj"], found_communities)
+        return self._graph, self._node_labels
 
-    def recursive(self, adjacency_matrix, found_communities):
+    def _recursive(self, adjacency_matrix, found_communities):
         if self._recursive_steps == self._settings["recursive_steps"]:
             print("Reached maximum recursive steps")
             return
@@ -108,24 +107,25 @@ class LabelPropagation:
                     del d_matrix[node1][node2]
                     del d_matrix[node2][node1]
 
-        self.graph = nx.Graph(d_matrix)
+        self._graph = nx.Graph(d_matrix)
         if self._is_block_diagonal(d_matrix):
             return
 
         found_communities = []
         for i in range(self._settings["number_of_partitions"]):
-            self._init_labels()
+            self._initialize_labels()
             self._algorithm()
             found_communities.append(self._get_communities())
 
         self._recursive_steps += 1
-        self.recursive(self.graph.__dict__["_adj"], found_communities)
+        self._recursive(self._graph.__dict__["_adj"], found_communities)
         return
 
     def _is_block_diagonal(self, new_d_matrix):
         for k1, k2 in combinations(new_d_matrix.keys(), r=2):
             if k2 in new_d_matrix[k1]:
-                if self._settings["threshold"] < new_d_matrix[k1][k2]["weight"] < self._settings["number_of_partitions"]:
+                if self._settings["threshold"] < new_d_matrix[k1][k2]["weight"] < self._settings[
+                 "number_of_partitions"]:
                     return False
         return True
 
@@ -154,43 +154,40 @@ class LabelPropagation:
         return d_copy
 
     def _get_communities(self):
-        unique_community_labels = set(self._label_map.values())
+        unique_community_labels = set(self._node_labels.values())
         unique_communities_by_label = {value: [] for value in unique_community_labels}
-        for node, label in self._label_map.items():
+        for node, label in self._node_labels.items():
             unique_communities_by_label[label].append(node)
         return unique_communities_by_label.values()
 
-    def _init_labels(self):
-        for label, node in enumerate(self.graph.nodes()):
-            self._label_map[node] = label
+    def _initialize_labels(self):
+        for label, node in enumerate(self._graph.nodes()):
+            self._node_labels[node] = label
 
     def _inclusion(self, node, label_cnt_dict, max_labels, max_label_value):
-        if self._label_map[node] in max_labels:
-            return self._label_map[node]
-        elif self._label_map[node] in label_cnt_dict:
-            if max_label_value - label_cnt_dict[self._label_map[node]] > 1:
-                return random.choice(max_labels)
-            else:
-                max_labels.append(self._label_map[node])
-                return random.choice(max_labels)
-        else:
+        if self._node_labels[node] in max_labels:
+            return self._node_labels[node]
+        elif self._node_labels[node] in label_cnt_dict and max_label_value - label_cnt_dict[
+          self._node_labels[node]] == 1:
+            max_labels.append(self._node_labels[node])
             return random.choice(max_labels)
+        return random.choice(max_labels)
 
     def _retention(self, node, max_labels):
-        if self._label_map[node] in max_labels:
-            return self._label_map[node]
-        else:
-            return random.choice(max_labels)
+        if self._node_labels[node] in max_labels:
+            return self._node_labels[node]
+        return random.choice(max_labels)
 
     def _maximal_neighbouring_label(self, node):
         if self._settings["label_ties_resolution"] not in ["random", "inclusion", "retention"]:
             raise ValueError("Invalid label ties resolution parameter")
 
-        labels = [self._label_map[adj] for adj in self.graph[node].keys()]
-        unique, counts = np.unique(np.array(labels), return_counts=True)
-        label_cnt_dict = dict(zip(unique, counts))
-        max_label_value = np.max(counts)
-        max_labels = unique[np.argwhere(counts == np.amax(counts)).flatten()].tolist()
+        neighbor_labels = [self._node_labels[neighbor_node] for neighbor_node in self._graph[node].keys()]
+        unique_neighbor_labels, unique_neighbor_label_counts = np.unique(np.array(neighbor_labels), return_counts=True)
+        neighbor_label_counts_dict = dict(zip(unique_neighbor_labels, unique_neighbor_label_counts))
+        maximal_label_count = np.max(unique_neighbor_label_counts)
+        maximal_labels = unique_neighbor_labels[
+            np.argwhere(unique_neighbor_label_counts == np.amax(unique_neighbor_label_counts)).flatten()].tolist()
 
         """
         labels = [self._label_map[adj] for adj in self.graph[node].keys()]
@@ -201,41 +198,43 @@ class LabelPropagation:
         max_labels = list(max_label_cnt.keys())
         """
 
-        if len(max_labels) == 1:
-            return max_labels[0]
+        if len(maximal_labels) == 1:
+            return maximal_labels[0]
         elif self._settings["label_ties_resolution"] == "random":
-            return random.choice(max_labels)
+            return random.choice(maximal_labels)
         elif self._settings["label_ties_resolution"] == "inclusion":
-            return self._inclusion(node, label_cnt_dict, max_labels, max_label_value)
+            return self._inclusion(node, neighbor_label_counts_dict, maximal_labels, maximal_label_count)
         elif self._settings["label_ties_resolution"] == "retention":
-            return self._retention(node, max_labels)
+            return self._retention(node, maximal_labels)
 
     def _maximal_neighbouring_weight(self, node):
         if self._settings["label_ties_resolution"] not in ["random", "inclusion", "retention"]:
             raise ValueError("Invalid label ties resolution parameter")
 
         weights = {}
-        for adj in self.graph[node].keys():
-            if self._label_map[adj] in weights:
-                weights[self._label_map[adj]] += self.graph[node][adj]["weight"]
+        for neighbor_node in self._graph[node].keys():
+            if self._node_labels[neighbor_node] in weights:
+                weights[self._node_labels[neighbor_node]] += self._graph[node][neighbor_node]["weight"]
             else:
-                weights[self._label_map[adj]] = self.graph[node][adj]["weight"]
+                weights[self._node_labels[neighbor_node]] = self._graph[node][neighbor_node]["weight"]
         max_weight_value = max(weights.values())
-        max_weight_cnt = {key: max_weight_value for key in weights.keys() if weights[key] == max_weight_value}
-        max_weights = list(max_weight_cnt.keys())
+        max_weight_labels = []
+        for neighbor_label in weights.keys():
+            if weights[neighbor_label] == max_weight_value:
+                max_weight_labels.append(neighbor_label)
 
-        if len(max_weights) == 1:
-            return max_weights[0]
+        if len(max_weight_labels) == 1:
+            return max_weight_labels[0]
         elif self._settings["label_ties_resolution"] in ["random", "inclusion"]:
-            return random.choice(max_weights)
+            return random.choice(max_weight_labels)
         elif self._settings["label_ties_resolution"] == "retention":
-            return self._retention(node, max_weights)
+            return self._retention(node, max_weight_labels)
 
     # A function used by DFS
     def _dfs_recursive(self, v, visited, community, connected_group):
         visited[v] = True
 
-        for i in self.graph[v].keys():
+        for i in self._graph[v].keys():
             if i in community and not visited[i]:
                 community.remove(i)
                 connected_group.append(i)
@@ -258,8 +257,8 @@ class LabelPropagation:
         if self._settings["label_equilibrium_criteria"] not in ["label-equilibrium", "strong-community"]:
             raise ValueError("Invalid label equilibrium criteria parameter")
 
-        for node in self.graph.nodes():
-            labels = [self._label_map[adj] for adj in self.graph[node].keys()]
+        for node in self._graph.nodes():
+            labels = [self._node_labels[adj] for adj in self._graph[node].keys()]
             unique, counts = np.unique(np.array(labels), return_counts=True)
             max_labels = unique[np.argwhere(counts == np.amax(counts)).flatten()].tolist()
 
@@ -268,26 +267,26 @@ class LabelPropagation:
                     continue
                 elif self._settings["label_equilibrium_criteria"] == "strong-community":
                     return True
-            elif self._label_map[node] != max_labels[0]:
+            elif self._node_labels[node] != max_labels[0]:
                 return True
         return False
 
     def _asynchronous_propagation(self):
         change = False
-        for node in random.sample(self.graph.nodes(), len(self.graph.nodes())):
+        for node in random.sample(self._graph.nodes(), len(self._graph.nodes())):
             if self._settings["weighted"]:
                 new_label = self._maximal_neighbouring_weight(node)
             else:
                 new_label = self._maximal_neighbouring_label(node)
-            if self._label_map[node] != new_label:
-                self._label_map[node] = new_label
+            if self._node_labels[node] != new_label:
+                self._node_labels[node] = new_label
                 change = True
         return change
 
     def _synchronous_propagation(self):
         change = False
-        sync_label_map = copy.deepcopy(self._label_map)
-        for node in random.sample(self.graph.nodes(), len(self.graph.nodes())):
+        sync_label_map = copy.deepcopy(self._node_labels)
+        for node in random.sample(self._graph.nodes(), len(self._graph.nodes())):
             if self._settings["weighted"]:
                 new_label = self._maximal_neighbouring_weight(node)
             else:
@@ -295,7 +294,7 @@ class LabelPropagation:
             if sync_label_map[node] != new_label:
                 sync_label_map[node] = new_label
                 change = True
-        self._label_map = sync_label_map
+        self._node_labels = sync_label_map
         return change
 
     def _algorithm(self):
