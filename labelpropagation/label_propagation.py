@@ -7,13 +7,12 @@ import numpy as np
 
 
 class LabelPropagation:
-    def __init__(self, file_path, graph_type="U"):
-        self._graph_type = graph_type
-        self._graph = self._initialize_graph_from_file(file_path)
+    def __init__(self, file_path, network_type="U"):
+        self._network_type = network_type
+        self._network = self._initialize_graph_from_file(file_path)
         self._node_labels = {}
         self._settings = {}
         self._recursive_steps = None
-        self._initialize_labels()
 
     def _initialize_graph_from_file(self, file_path):
         new_graph = nx.Graph()
@@ -21,35 +20,34 @@ class LabelPropagation:
             edges = []
             for line in f:
                 line = line.split()
-                if self._graph_type == "W" and len(line) < 3:
+                if self._network_type == "W" and len(line) < 3:
                     raise ValueError("Input file does not contain weights.")
-                if self._graph_type == "U":
+                if self._network_type == "U":
                     edges.append((line[0], line[1]))
-                elif self._graph_type == "W":
+                elif self._network_type == "W":
                     edges.append((line[0], line[1], int(line[2])))
-            if self._graph_type == "U":
+            if self._network_type == "U":
                 new_graph.add_edges_from(edges)
-            elif self._graph_type == "W":
+            elif self._network_type == "W":
                 new_graph.add_weighted_edges_from(edges)
         return new_graph
 
-    def run(self, label_resolution, equilibrium, order, weighted=False, maximum_iterations=100):
-        if weighted and not self._graph_type == "W":
-            raise ValueError("Cannot perform label propagation that includes weighted edges, "
-                             "because graph type is not \"W\" (Weighted)")
-        if weighted and label_resolution == "inclusion":
+    def start(self, label_ties_resolution, convergence_criterium, order, weighted=False, maximum_iterations=100):
+        if weighted and not self._network_type == "W":
+            raise ValueError("Cannot perform label propagation that includes weighted edges, because graph type is not \"W\" (Weighted)")
+        if weighted and label_ties_resolution == "inclusion":
             warnings.warn("Inclusion cannot be used on weighted graphs, random resolution will be performed instead")
 
         self._settings = {
-            "label_ties_resolution": label_resolution,
-            "label_equilibrium_criteria": equilibrium,
+            "label_ties_resolution": label_ties_resolution,
+            "convergence_criterium": convergence_criterium,
             "order_of_label_propagation": order,
             "weighted": weighted,
             "maximum_iterations": maximum_iterations,
         }
 
-        self._initialize_labels()
-        self._algorithm()
+        self._initialize_unique_labels()
+        self._main()
 
         communities = self._get_communities()
         result = self._dfs_connectivity(communities)
@@ -59,99 +57,7 @@ class LabelPropagation:
                 for member in community:
                     self._node_labels[member] = index
 
-        return self._graph, self._node_labels
-
-    def consensus_clustering(self, label_resolution, equilibrium, order, threshold, number_of_partitions,
-                             recursive_steps=10, weighted=False, maximum_iterations=100):
-        if weighted and not self._graph_type == "W":
-            raise ValueError("Cannot perform label propagation that includes weighted edges, "
-                             "because graph type is not \"W\" (Weighted)")
-        if weighted and label_resolution == "inclusion":
-            warnings.warn("Inclusion cannot be used on weighted graphs, random resolution will be performed instead")
-        if threshold > number_of_partitions or threshold < 0:
-            raise ValueError("Threshold must be between 0 and number of partitions")
-
-        self._settings = {
-            "label_ties_resolution": label_resolution,
-            "label_equilibrium_criteria": equilibrium,
-            "order_of_label_propagation": order,
-            "threshold": threshold,
-            "maximum_iterations": maximum_iterations,
-            "weighted": weighted,
-            "number_of_partitions": number_of_partitions,
-            "recursive_steps": recursive_steps,
-        }
-
-        found_communities = []
-        for i in range(self._settings["number_of_partitions"]):
-            self._initialize_labels()
-            self._algorithm()
-            found_communities.append(self._get_communities())
-
-        self._settings["weighted"] = True
-        self._recursive_steps = 0
-        self._recursive(self._graph.__dict__["_adj"], found_communities)
-        return self._graph, self._node_labels
-
-    def _recursive(self, adjacency_matrix, found_communities):
-        if self._recursive_steps == self._settings["recursive_steps"]:
-            print("Reached maximum recursive steps")
-            return
-
-        clean_d_matrix = self._get_clean_d_matrix(adjacency_matrix)
-        d_matrix = self._compute_d_matrix(clean_d_matrix, found_communities)
-
-        for node1, node2 in combinations(d_matrix.keys(), r=2):
-            if node2 in d_matrix[node1]:
-                if d_matrix[node1][node2]["weight"] < self._settings["threshold"]:
-                    del d_matrix[node1][node2]
-                    del d_matrix[node2][node1]
-
-        self._graph = nx.Graph(d_matrix)
-        if self._is_block_diagonal(d_matrix):
-            return
-
-        found_communities = []
-        for i in range(self._settings["number_of_partitions"]):
-            self._initialize_labels()
-            self._algorithm()
-            found_communities.append(self._get_communities())
-
-        self._recursive_steps += 1
-        self._recursive(self._graph.__dict__["_adj"], found_communities)
-        return
-
-    def _is_block_diagonal(self, new_d_matrix):
-        for k1, k2 in combinations(new_d_matrix.keys(), r=2):
-            if k2 in new_d_matrix[k1]:
-                if self._settings["threshold"] < new_d_matrix[k1][k2]["weight"] < self._settings[
-                 "number_of_partitions"]:
-                    return False
-        return True
-
-    @staticmethod
-    def _get_clean_d_matrix(input_matrix):
-        d = {}
-        for key, val in input_matrix.items():
-            d[key] = {}
-            for key2, val2 in val.items():
-                d[key][key2] = {}
-                d[key][key2]["weight"] = 0
-        return d
-
-    @staticmethod
-    def _compute_d_matrix(d_matrix, found_communities):
-        d_copy = copy.deepcopy(d_matrix)
-        for community in found_communities:
-            for members in community:
-                for node1, node2 in combinations(members, r=2):
-                    if node2 not in d_copy[node1]:
-                        d_copy[node1][node2] = {"weight": 1}
-                        d_copy[node2][node1] = {"weight": 1}
-                    else:
-                        d_copy[node1][node2]["weight"] += 1
-                        d_copy[node2][node1]["weight"] += 1
-        return d_copy
+        return self._network, self._node_labels
 
     def _get_communities(self):
         unique_community_labels = set(self._node_labels.values())
@@ -160,8 +66,8 @@ class LabelPropagation:
             unique_communities_by_label[label].append(node)
         return unique_communities_by_label.values()
 
-    def _initialize_labels(self):
-        for label, node in enumerate(self._graph.nodes()):
+    def _initialize_unique_labels(self):
+        for label, node in enumerate(self._network.nodes()):
             self._node_labels[node] = label
 
     def _inclusion(self, node, label_cnt_dict, max_labels, max_label_value):
@@ -180,9 +86,9 @@ class LabelPropagation:
 
     def _maximal_neighbouring_label(self, node):
         if self._settings["label_ties_resolution"] not in ["random", "inclusion", "retention"]:
-            raise ValueError("Invalid label ties resolution parameter")
+            raise ValueError("Invalid label ties resolution parameter. Choose between \"random\", \"inclusion\" and \"retention\".")
 
-        neighbor_labels = [self._node_labels[neighbor_node] for neighbor_node in self._graph[node].keys()]
+        neighbor_labels = [self._node_labels[neighbor_node] for neighbor_node in self._network[node].keys()]
         unique_neighbor_labels, unique_neighbor_label_counts = np.unique(np.array(neighbor_labels), return_counts=True)
         neighbor_label_counts_dict = dict(zip(unique_neighbor_labels, unique_neighbor_label_counts))
         maximal_label_count = np.max(unique_neighbor_label_counts)
@@ -209,14 +115,14 @@ class LabelPropagation:
 
     def _maximal_neighbouring_weight(self, node):
         if self._settings["label_ties_resolution"] not in ["random", "inclusion", "retention"]:
-            raise ValueError("Invalid label ties resolution parameter")
+            raise ValueError("Invalid label ties resolution parameter. Choose between \"random\", \"inclusion\" and \"retention\".")
 
         weights = {}
-        for neighbor_node in self._graph[node].keys():
+        for neighbor_node in self._network[node].keys():
             if self._node_labels[neighbor_node] in weights:
-                weights[self._node_labels[neighbor_node]] += self._graph[node][neighbor_node]["weight"]
+                weights[self._node_labels[neighbor_node]] += self._network[node][neighbor_node]["weight"]
             else:
-                weights[self._node_labels[neighbor_node]] = self._graph[node][neighbor_node]["weight"]
+                weights[self._node_labels[neighbor_node]] = self._network[node][neighbor_node]["weight"]
         max_weight_value = max(weights.values())
         max_weight_labels = []
         for neighbor_label in weights.keys():
@@ -234,7 +140,7 @@ class LabelPropagation:
     def _dfs_recursive(self, v, visited, community, connected_group):
         visited[v] = True
 
-        for i in self._graph[v].keys():
+        for i in self._network[v].keys():
             if i in community and not visited[i]:
                 community.remove(i)
                 connected_group.append(i)
@@ -254,18 +160,18 @@ class LabelPropagation:
         return result
 
     def _convergence(self):
-        if self._settings["label_equilibrium_criteria"] not in ["label-equilibrium", "strong-community"]:
-            raise ValueError("Invalid label equilibrium criteria parameter")
+        if self._settings["convergence_criterium"] not in ["label-equilibrium", "strong-community"]:
+            raise ValueError("Invalid label equilibrium criteria parameter. Choose between \"label-equilibrium\", \"strong-community\" and \"change\".")
 
-        for node in self._graph.nodes():
-            labels = [self._node_labels[adj] for adj in self._graph[node].keys()]
+        for node in self._network.nodes():
+            labels = [self._node_labels[adj] for adj in self._network[node].keys()]
             unique, counts = np.unique(np.array(labels), return_counts=True)
             max_labels = unique[np.argwhere(counts == np.amax(counts)).flatten()].tolist()
 
             if len(max_labels) > 1:
-                if self._settings["label_equilibrium_criteria"] == "label-equilibrium":
+                if self._settings["convergence_criterium"] == "label-equilibrium":
                     continue
-                elif self._settings["label_equilibrium_criteria"] == "strong-community":
+                elif self._settings["convergence_criterium"] == "strong-community":
                     return True
             elif self._node_labels[node] != max_labels[0]:
                 return True
@@ -273,7 +179,7 @@ class LabelPropagation:
 
     def _asynchronous_propagation(self):
         change = False
-        for node in random.sample(self._graph.nodes(), len(self._graph.nodes())):
+        for node in random.sample(self._network.nodes(), len(self._network.nodes())):
             if self._settings["weighted"]:
                 new_label = self._maximal_neighbouring_weight(node)
             else:
@@ -286,7 +192,7 @@ class LabelPropagation:
     def _synchronous_propagation(self):
         change = False
         sync_label_map = copy.deepcopy(self._node_labels)
-        for node in random.sample(self._graph.nodes(), len(self._graph.nodes())):
+        for node in random.sample(self._network.nodes(), len(self._network.nodes())):
             if self._settings["weighted"]:
                 new_label = self._maximal_neighbouring_weight(node)
             else:
@@ -297,7 +203,7 @@ class LabelPropagation:
         self._node_labels = sync_label_map
         return change
 
-    def _algorithm(self):
+    def _main(self):
         change = True
         iterations = 0
         while change and iterations < self._settings["maximum_iterations"]:
@@ -308,5 +214,96 @@ class LabelPropagation:
                 change = self._asynchronous_propagation()
             else:
                 raise ValueError("Invalid iteration order parameter")
-            if self._settings["label_equilibrium_criteria"] != "change":
+            if self._settings["convergence_criterium"] != "change":
                 change = self._convergence()
+
+    def consensus_clustering(self, label_ties_resolution, convergence_criterium, order, threshold, number_of_partitions, max_recursive_steps=10, weighted=False, maximum_iterations=100, fcc=False):
+        if weighted and not self._network_type == "W":
+            raise ValueError("Cannot perform label propagation that includes weighted edges, because graph type is not \"W\" (Weighted)")
+        if weighted and label_ties_resolution == "inclusion":
+            warnings.warn("Inclusion cannot be used on weighted graphs, random resolution will be performed instead")
+        if threshold > number_of_partitions or threshold < 0:
+            raise ValueError("Threshold must be between 0 and number of partitions")
+
+        self._settings = {
+            "label_ties_resolution": label_ties_resolution,
+            "convergence_criterium": convergence_criterium,
+            "order_of_label_propagation": order,
+            "threshold": threshold,
+            "maximum_iterations": maximum_iterations,
+            "weighted": weighted,
+            "number_of_partitions": number_of_partitions,
+            "max_recursive_steps": max_recursive_steps,
+            "fcc": fcc,
+        }
+
+        found_communities = []
+        for i in range(self._settings["number_of_partitions"]):
+            self._initialize_unique_labels()
+            self._main()
+            found_communities.append(self._get_communities())
+
+        self._settings["weighted"] = True
+        self._recursive_steps = 0
+        self._recursive(self._network.__dict__["_adj"], found_communities)
+        return self._network, self._node_labels
+
+    def _recursive(self, adjacency_matrix, found_communities):
+        print(adjacency_matrix)
+        if self._recursive_steps >= self._settings["max_recursive_steps"]:
+            print("Reached maximum recursive steps")
+            return
+
+        clean_d_matrix = self._get_clean_d_matrix(adjacency_matrix)
+        d_matrix = self._compute_d_matrix(clean_d_matrix, found_communities)
+
+        for node1, node2 in combinations(d_matrix.keys(), r=2):
+            if node2 in d_matrix[node1]:
+                if d_matrix[node1][node2]["weight"] < self._settings["threshold"]:
+                    del d_matrix[node1][node2]
+                    del d_matrix[node2][node1]
+
+        self._network = nx.Graph(d_matrix)
+        if self._is_block_diagonal(d_matrix):
+            return
+
+        found_communities = []
+        for i in range(self._settings["number_of_partitions"]):
+            self._initialize_unique_labels()
+            self._main()
+            found_communities.append(self._get_communities())
+
+        self._recursive_steps += 1
+        self._recursive(self._network.__dict__["_adj"], found_communities)
+        return
+
+    def _is_block_diagonal(self, new_d_matrix):
+        for k1, k2 in combinations(new_d_matrix.keys(), r=2):
+            if k2 in new_d_matrix[k1]:
+                if self._settings["threshold"] < new_d_matrix[k1][k2]["weight"] < self._settings["number_of_partitions"]:
+                    return False
+        return True
+
+    @staticmethod
+    def _get_clean_d_matrix(input_matrix):
+        d = {}
+        for key, val in input_matrix.items():
+            d[key] = {}
+            for key2, val2 in val.items():
+                d[key][key2] = {}
+                d[key][key2]["weight"] = 0
+        return d
+
+    @staticmethod
+    def _compute_d_matrix(d_matrix, found_communities):
+        d_copy = copy.deepcopy(d_matrix)
+        for community in found_communities:
+            for members in community:
+                for node1, node2 in combinations(members, r=2):
+                    if node2 not in d_copy[node1]:
+                        d_copy[node1][node2] = {"weight": 1}
+                        d_copy[node2][node1] = {"weight": 1}
+                    else:
+                        d_copy[node1][node2]["weight"] += 1
+                        d_copy[node2][node1]["weight"] += 1
+        return d_copy

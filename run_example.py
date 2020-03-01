@@ -1,12 +1,10 @@
 from labelpropagation.label_propagation import LabelPropagation
-from collections import Counter
 
-lp = LabelPropagation("data/dolphins/out.dolphins", "U")
+lp = LabelPropagation("path/to/data.txt", "U")
 
-_, labels = lp.run(label_resolution="retention", equilibrium="strong-community", order="asynchronous", weighted=False)
-print(len(Counter(labels.values())))
+network, labels = lp.start(label_ties_resolution="retention", convergence_criterium="strong-community", order="asynchronous", weighted=False)
 
-_, labels = lp.consensus_clustering(label_resolution="retention", equilibrium="strong-community", order="asynchronous",
-                                 threshold=6, number_of_partitions=12, weighted=False)
-print(len(Counter(labels.values())))
+network, labels = lp.consensus_clustering(label_ties_resolution="retention", convergence_criterium="strong-community", order="asynchronous", threshold=6, number_of_partitions=12, weighted=False, fcc=False)
+
+network, labels = lp.consensus_clustering(label_ties_resolution="retention", convergence_criterium="strong-community", order="asynchronous", threshold=6, number_of_partitions=12, weighted=False, fcc=True)
 
