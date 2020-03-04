@@ -217,7 +217,7 @@ class LabelPropagation:
             if self._settings["convergence_criterium"] != "change":
                 change = self._convergence()
 
-    def consensus_clustering(self, label_ties_resolution, convergence_criterium, order, threshold, number_of_partitions, max_recursive_steps=10, weighted=False, maximum_iterations=100, fcc=False):
+    def consensus_clustering(self, label_ties_resolution, convergence_criterium, order, threshold, number_of_partitions, max_recursive_steps=10, weighted=False, maximum_iterations=100, fcc=False, convergence_factor=0.02):
         if weighted and not self._network_type == "W":
             raise ValueError("Cannot perform label propagation that includes weighted edges, because graph type is not \"W\" (Weighted)")
         if weighted and label_ties_resolution == "inclusion":
@@ -235,53 +235,84 @@ class LabelPropagation:
             "number_of_partitions": number_of_partitions,
             "max_recursive_steps": max_recursive_steps,
             "fcc": fcc,
+            "convergence_factor": convergence_factor,
         }
 
-        found_communities = []
+        found_communities = {}
         for i in range(self._settings["number_of_partitions"]):
             self._initialize_unique_labels()
             self._main()
-            found_communities.append(self._get_communities())
+            found_communities[i] = self._node_labels
 
         self._settings["weighted"] = True
         self._recursive_steps = 0
-        self._recursive(self._network.__dict__["_adj"], found_communities)
+        self._recursive(found_communities)
         return self._network, self._node_labels
 
-    def _recursive(self, adjacency_matrix, found_communities):
-        print(adjacency_matrix)
+    def _recursive(self, found_communities):
         if self._recursive_steps >= self._settings["max_recursive_steps"]:
             print("Reached maximum recursive steps")
             return
 
-        clean_d_matrix = self._get_clean_d_matrix(adjacency_matrix)
-        d_matrix = self._compute_d_matrix(clean_d_matrix, found_communities)
+        for u, v in self._network.edges():
+            self._network[u][v]['weight'] = 0.0
 
-        for node1, node2 in combinations(d_matrix.keys(), r=2):
-            if node2 in d_matrix[node1]:
-                if d_matrix[node1][node2]["weight"] < self._settings["threshold"]:
-                    del d_matrix[node1][node2]
-                    del d_matrix[node2][node1]
+        for node, nbr in self._network.edges():
+            for i in range(self._settings["number_of_partitions"]):
+                communities = found_communities[i]
+                if communities[node] == communities[nbr]:
+                    if not self._network.has_edge(node, nbr):
+                        self._network.add_edge(node, nbr, weight=0)
+                    self._network[node][nbr]['weight'] += 1
 
-        self._network = nx.Graph(d_matrix)
-        if self._is_block_diagonal(d_matrix):
+        edges_to_be_removed = []
+        for u, v in self._network.edges():
+            if self._network[u][v]['weight'] < self._settings["threshold"] * self._settings["number_of_partitions"]:
+                edges_to_be_removed.append((u, v))
+
+        self._network.remove_edges_from(edges_to_be_removed)
+
+        if self._settings["fcc"]:
+            for _ in range(self._network.number_of_edges()):
+                node = np.random.choice(self._network.nodes())
+                neighbors = [n[1] for n in self._network.edges(node)]
+
+                if len(neighbors) >= 2:
+                    j, k = random.sample(set(neighbors), 2)
+
+                    if not self._network.has_edge(j, k):
+                        self._network.add_edge(j, k, weight=0)
+
+                        for i in range(self._settings["number_of_partitions"]):
+                            communities = found_communities[i]
+                            if communities[j] == communities[k]:
+                                self._network[j][k]['weight'] += 1
+
+        if self._is_block_diagonal():
             return
 
-        found_communities = []
+        found_communities = {}
         for i in range(self._settings["number_of_partitions"]):
             self._initialize_unique_labels()
             self._main()
-            found_communities.append(self._get_communities())
+            found_communities[i] = self._node_labels
 
         self._recursive_steps += 1
-        self._recursive(self._network.__dict__["_adj"], found_communities)
+        self._recursive(found_communities)
         return
 
-    def _is_block_diagonal(self, new_d_matrix):
-        for k1, k2 in combinations(new_d_matrix.keys(), r=2):
-            if k2 in new_d_matrix[k1]:
-                if self._settings["threshold"] < new_d_matrix[k1][k2]["weight"] < self._settings["number_of_partitions"]:
+    def _is_block_diagonal(self):
+        count_faulty_edges = 0
+        for weight in nx.get_edge_attributes(self._network, 'weight').values():
+            if self._settings["threshold"] < weight < self._settings["number_of_partitions"]:
+                if self._settings["fcc"]:
+                    count_faulty_edges += 1
+                else:
                     return False
+
+        if count_faulty_edges > self._settings["convergence_factor"] * self._network.number_of_edges():
+            return False
+
         return True
 
     @staticmethod
