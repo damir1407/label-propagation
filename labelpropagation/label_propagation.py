@@ -7,12 +7,16 @@ import numpy as np
 
 
 class LabelPropagation:
-    def __init__(self, file_path, network_type="U"):
+    def __init__(self, file_path=None, network_type="U", network=None):
         self._network_type = network_type
-        self._network = self._initialize_graph_from_file(file_path)
+        if file_path:
+            self._network = self._initialize_graph_from_file(file_path)
+        else:
+            self._network = network
         self._node_labels = {}
         self._settings = {}
-        self._recursive_steps = None
+        self.recursive_steps = None
+        self.iterations = None
 
     def _initialize_graph_from_file(self, file_path):
         new_graph = nx.Graph()
@@ -50,7 +54,10 @@ class LabelPropagation:
         self._main()
 
         communities = self._get_communities()
-        result = self._dfs_connectivity(communities)
+        if len(communities) > 1:
+            result = self._dfs_connectivity(communities)
+        else:
+            result = [1]
         if len(result) > len(communities):
             print("Disconnected communities found!")
             for index, community in enumerate(result):
@@ -205,9 +212,9 @@ class LabelPropagation:
 
     def _main(self):
         change = True
-        iterations = 0
-        while change and iterations < self._settings["maximum_iterations"]:
-            iterations = iterations + 1
+        self.iterations = 0
+        while change and self.iterations < self._settings["maximum_iterations"]:
+            self.iterations += 1
             if self._settings["order_of_label_propagation"] == "synchronous":
                 change = self._synchronous_propagation()
             elif self._settings["order_of_label_propagation"] == "asynchronous":
@@ -245,12 +252,12 @@ class LabelPropagation:
             found_communities[i] = self._node_labels
 
         self._settings["weighted"] = True
-        self._recursive_steps = 0
+        self.recursive_steps = 0
         self._recursive(found_communities)
         return self._network, self._node_labels
 
     def _recursive(self, found_communities):
-        if self._recursive_steps >= self._settings["max_recursive_steps"]:
+        if self.recursive_steps >= self._settings["max_recursive_steps"]:
             print("Reached maximum recursive steps")
             return
 
@@ -297,7 +304,7 @@ class LabelPropagation:
             self._main()
             found_communities[i] = self._node_labels
 
-        self._recursive_steps += 1
+        self.recursive_steps += 1
         self._recursive(found_communities)
         return
 
