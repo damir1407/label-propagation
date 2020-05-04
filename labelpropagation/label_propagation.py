@@ -1,22 +1,26 @@
 from itertools import combinations
+from collections import Counter
 import networkx as nx
 import random
 import copy
-import warnings
 import numpy as np
+import time
 
 
 class LabelPropagation:
-    def __init__(self, file_path=None, network_type="U", network=None):
-        self._network_type = network_type
+    def __init__(self, file_path=None, network=None):
+        self._weight = None
         if file_path:
             self._network = self._initialize_graph_from_file(file_path)
         else:
             self._network = network
         self._node_labels = {}
         self._settings = {}
+        self._seed = 2
         self.recursive_steps = None
         self.iterations = None
+        self.method_time = None
+        self.number_of_communities = None
 
     def _initialize_graph_from_file(self, file_path):
         new_graph = nx.Graph()
@@ -24,24 +28,18 @@ class LabelPropagation:
             edges = []
             for line in f:
                 line = line.split()
-                if self._network_type == "W" and len(line) < 3:
-                    raise ValueError("Input file does not contain weights.")
-                if self._network_type == "U":
+                if len(line) < 3:
                     edges.append((line[0], line[1]))
-                elif self._network_type == "W":
+                else:
                     edges.append((line[0], line[1], int(line[2])))
-            if self._network_type == "U":
+            if len(line) < 3:
                 new_graph.add_edges_from(edges)
-            elif self._network_type == "W":
+            else:
                 new_graph.add_weighted_edges_from(edges)
+                self._weight = "weight"
         return new_graph
 
     def start(self, label_ties_resolution, convergence_criterium, order, weighted=False, maximum_iterations=100):
-        if weighted and not self._network_type == "W":
-            raise ValueError("Cannot perform label propagation that includes weighted edges, because graph type is not \"W\" (Weighted)")
-        if weighted and label_ties_resolution == "inclusion":
-            warnings.warn("Inclusion cannot be used on weighted graphs, random resolution will be performed instead")
-
         self._settings = {
             "label_ties_resolution": label_ties_resolution,
             "convergence_criterium": convergence_criterium,
@@ -50,14 +48,16 @@ class LabelPropagation:
             "maximum_iterations": maximum_iterations,
         }
 
-        self._initialize_unique_labels()
+        start_time = time.time()
         self._main()
+        self.method_time = time.time() - start_time
 
         communities = self._get_communities()
+        self.number_of_communities = len(communities)
         if len(communities) > 1:
             result = self._dfs_connectivity(communities)
         else:
-            result = [1]
+            result = []
         if len(result) > len(communities):
             print("Disconnected communities found!")
             for index, community in enumerate(result):
@@ -73,17 +73,12 @@ class LabelPropagation:
             unique_communities_by_label[label].append(node)
         return unique_communities_by_label.values()
 
-    def _initialize_unique_labels(self):
-        for label, node in enumerate(self._network.nodes()):
-            self._node_labels[node] = label
+    @staticmethod
+    def _random(node, max_labels):
+        return random.choice(max_labels)
 
-    def _inclusion(self, node, label_cnt_dict, max_labels, max_label_value):
-        if self._node_labels[node] in max_labels:
-            return self._node_labels[node]
-        elif self._node_labels[node] in label_cnt_dict and max_label_value - label_cnt_dict[
-          self._node_labels[node]] == 1:
-            max_labels.append(self._node_labels[node])
-            return random.choice(max_labels)
+    @staticmethod
+    def _inclusion(node, max_labels):
         return random.choice(max_labels)
 
     def _retention(self, node, max_labels):
@@ -91,59 +86,27 @@ class LabelPropagation:
             return self._node_labels[node]
         return random.choice(max_labels)
 
+    def _find_max_labels_in_neighborhood(self, node):
+        label_freq = Counter()
+        for v in self._network[node]:
+            label_freq.update({self._node_labels[v]: self._network.edges[node, v][self._weight] if self._weight else 1})
+        if self._settings["label_ties_resolution"] == "inclusion":
+            label_freq.update({self._node_labels[node]: 1})
+
+        max_freq = max(label_freq.values())
+        return [label for label, freq in label_freq.items() if freq == max_freq]
+
     def _maximal_neighbouring_label(self, node):
-        if self._settings["label_ties_resolution"] not in ["random", "inclusion", "retention"]:
-            raise ValueError("Invalid label ties resolution parameter. Choose between \"random\", \"inclusion\" and \"retention\".")
+        best_labels = self._find_max_labels_in_neighborhood(node)
 
-        neighbor_labels = [self._node_labels[neighbor_node] for neighbor_node in self._network[node].keys()]
-        unique_neighbor_labels, unique_neighbor_label_counts = np.unique(np.array(neighbor_labels), return_counts=True)
-        neighbor_label_counts_dict = dict(zip(unique_neighbor_labels, unique_neighbor_label_counts))
-        maximal_label_count = np.max(unique_neighbor_label_counts)
-        maximal_labels = unique_neighbor_labels[
-            np.argwhere(unique_neighbor_label_counts == np.amax(unique_neighbor_label_counts)).flatten()].tolist()
+        if len(best_labels) == 1:
+            return best_labels[0]
+        else:
+            try:
+                return eval("self._" + self._settings["label_ties_resolution"] + "(node, best_labels)")
+            except Exception:
+                raise ValueError("Invalid label ties resolution parameter. Choose between \"random\", \"inclusion\" and \"retention\".")
 
-        """
-        labels = [self._label_map[adj] for adj in self.graph[node].keys()]
-        label_cnt_dict = Counter(labels)
-        max_label_value = max(label_cnt_dict.values())
-        max_label_cnt = {key: max_label_value for key in label_cnt_dict.keys() if
-                         label_cnt_dict[key] == max_label_value}
-        max_labels = list(max_label_cnt.keys())
-        """
-
-        if len(maximal_labels) == 1:
-            return maximal_labels[0]
-        elif self._settings["label_ties_resolution"] == "random":
-            return random.choice(maximal_labels)
-        elif self._settings["label_ties_resolution"] == "inclusion":
-            return self._inclusion(node, neighbor_label_counts_dict, maximal_labels, maximal_label_count)
-        elif self._settings["label_ties_resolution"] == "retention":
-            return self._retention(node, maximal_labels)
-
-    def _maximal_neighbouring_weight(self, node):
-        if self._settings["label_ties_resolution"] not in ["random", "inclusion", "retention"]:
-            raise ValueError("Invalid label ties resolution parameter. Choose between \"random\", \"inclusion\" and \"retention\".")
-
-        weights = {}
-        for neighbor_node in self._network[node].keys():
-            if self._node_labels[neighbor_node] in weights:
-                weights[self._node_labels[neighbor_node]] += self._network[node][neighbor_node]["weight"]
-            else:
-                weights[self._node_labels[neighbor_node]] = self._network[node][neighbor_node]["weight"]
-        max_weight_value = max(weights.values())
-        max_weight_labels = []
-        for neighbor_label in weights.keys():
-            if weights[neighbor_label] == max_weight_value:
-                max_weight_labels.append(neighbor_label)
-
-        if len(max_weight_labels) == 1:
-            return max_weight_labels[0]
-        elif self._settings["label_ties_resolution"] in ["random", "inclusion"]:
-            return random.choice(max_weight_labels)
-        elif self._settings["label_ties_resolution"] == "retention":
-            return self._retention(node, max_weight_labels)
-
-    # A function used by DFS
     def _dfs_recursive(self, v, visited, community, connected_group):
         visited[v] = True
 
@@ -167,68 +130,77 @@ class LabelPropagation:
         return result
 
     def _convergence(self):
-        if self._settings["convergence_criterium"] not in ["label-equilibrium", "strong-community"]:
-            raise ValueError("Invalid label equilibrium criteria parameter. Choose between \"label-equilibrium\", \"strong-community\" and \"change\".")
+        nodes = list(self._network)
+        for node in nodes:
+            max_labels = self._find_max_labels_in_neighborhood(node)
 
-        for node in self._network.nodes():
-            labels = [self._node_labels[adj] for adj in self._network[node].keys()]
-            unique, counts = np.unique(np.array(labels), return_counts=True)
-            max_labels = unique[np.argwhere(counts == np.amax(counts)).flatten()].tolist()
-
+            # TODO: Is node label in max_labels?
             if len(max_labels) > 1:
                 if self._settings["convergence_criterium"] == "label-equilibrium":
                     continue
                 elif self._settings["convergence_criterium"] == "strong-community":
                     return True
+                else:
+                    raise ValueError("Invalid label equilibrium criteria parameter. Choose between \"label-equilibrium\", \"strong-community\" and \"change\".")
+
             elif self._node_labels[node] != max_labels[0]:
                 return True
         return False
 
     def _asynchronous_propagation(self):
         change = False
-        for node in random.sample(self._network.nodes(), len(self._network.nodes())):
-            if self._settings["weighted"]:
-                new_label = self._maximal_neighbouring_weight(node)
-            else:
-                new_label = self._maximal_neighbouring_label(node)
+        nodes = list(self._network)
+        random.seed(self._seed)
+        random.shuffle(nodes)
+
+        for node in nodes:
+            if len(self._network[node]) < 1:
+                # TODO: Add edge to random node
+                continue
+
+            new_label = self._maximal_neighbouring_label(node)
+
             if self._node_labels[node] != new_label:
                 self._node_labels[node] = new_label
                 change = True
+
         return change
 
     def _synchronous_propagation(self):
         change = False
+        nodes = list(self._network)
+        random.seed(self._seed)
+        random.shuffle(nodes)
         sync_label_map = copy.deepcopy(self._node_labels)
-        for node in random.sample(self._network.nodes(), len(self._network.nodes())):
-            if self._settings["weighted"]:
-                new_label = self._maximal_neighbouring_weight(node)
-            else:
-                new_label = self._maximal_neighbouring_label(node)
+
+        for node in nodes:
+            if len(self._network[node]) < 1:
+                continue
+
+            new_label = self._maximal_neighbouring_label(node)
+
             if sync_label_map[node] != new_label:
                 sync_label_map[node] = new_label
                 change = True
+
         self._node_labels = sync_label_map
         return change
 
     def _main(self):
+        self._node_labels = {node: label for label, node in enumerate(self._network)}
         change = True
         self.iterations = 0
         while change and self.iterations < self._settings["maximum_iterations"]:
             self.iterations += 1
-            if self._settings["order_of_label_propagation"] == "synchronous":
-                change = self._synchronous_propagation()
-            elif self._settings["order_of_label_propagation"] == "asynchronous":
-                change = self._asynchronous_propagation()
-            else:
+            try:
+                change = eval("self._" + self._settings["order_of_label_propagation"] + "_propagation()")
+            except Exception:
                 raise ValueError("Invalid iteration order parameter")
+
             if self._settings["convergence_criterium"] != "change":
                 change = self._convergence()
 
     def consensus_clustering(self, label_ties_resolution, convergence_criterium, order, threshold, number_of_partitions, max_recursive_steps=10, weighted=False, maximum_iterations=100, fcc=False, convergence_factor=0.02):
-        if weighted and not self._network_type == "W":
-            raise ValueError("Cannot perform label propagation that includes weighted edges, because graph type is not \"W\" (Weighted)")
-        if weighted and label_ties_resolution == "inclusion":
-            warnings.warn("Inclusion cannot be used on weighted graphs, random resolution will be performed instead")
         if threshold > number_of_partitions or threshold < 0:
             raise ValueError("Threshold must be between 0 and number of partitions")
 
@@ -247,7 +219,6 @@ class LabelPropagation:
 
         found_communities = {}
         for i in range(self._settings["number_of_partitions"]):
-            self._initialize_unique_labels()
             self._main()
             found_communities[i] = self._node_labels
 
@@ -300,7 +271,6 @@ class LabelPropagation:
 
         found_communities = {}
         for i in range(self._settings["number_of_partitions"]):
-            self._initialize_unique_labels()
             self._main()
             found_communities[i] = self._node_labels
 
