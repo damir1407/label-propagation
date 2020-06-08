@@ -11,9 +11,9 @@ class LabelPropagation:
     def __init__(self, file_path=None, network=None):
         self._weight = None
         if file_path:
-            self._network = self._initialize_graph_from_file(file_path)
+            self.network = self._initialize_graph_from_file(file_path)
         else:
-            self._network = network
+            self.network = network
         self._node_labels = {}
         self._settings = {}
         self._seed = 2
@@ -64,7 +64,7 @@ class LabelPropagation:
                 for member in community:
                     self._node_labels[member] = index
 
-        return self._network, self._node_labels
+        return self.network, self._node_labels
 
     def _get_communities(self):
         unique_community_labels = set(self._node_labels.values())
@@ -88,8 +88,8 @@ class LabelPropagation:
 
     def _find_max_labels_in_neighborhood(self, node):
         label_freq = Counter()
-        for v in self._network[node]:
-            label_freq.update({self._node_labels[v]: self._network.edges[node, v][self._weight] if self._weight else 1})
+        for v in self.network[node]:
+            label_freq.update({self._node_labels[v]: self.network.edges[node, v][self._weight] if self._weight else 1})
         if self._settings["label_ties_resolution"] == "inclusion":
             label_freq.update({self._node_labels[node]: 1})
 
@@ -110,7 +110,7 @@ class LabelPropagation:
     def _dfs_recursive(self, v, visited, community, connected_group):
         visited[v] = True
 
-        for i in self._network[v].keys():
+        for i in self.network[v].keys():
             if i in community and not visited[i]:
                 community.remove(i)
                 connected_group.append(i)
@@ -130,7 +130,7 @@ class LabelPropagation:
         return result
 
     def _convergence(self):
-        nodes = list(self._network)
+        nodes = list(self.network)
         for node in nodes:
             max_labels = self._find_max_labels_in_neighborhood(node)
 
@@ -149,12 +149,12 @@ class LabelPropagation:
 
     def _asynchronous_propagation(self):
         change = False
-        nodes = list(self._network)
+        nodes = list(self.network)
         random.seed(self._seed)
         random.shuffle(nodes)
 
         for node in nodes:
-            if len(self._network[node]) < 1:
+            if len(self.network[node]) < 1:
                 # TODO: Add edge to random node
                 continue
 
@@ -168,13 +168,13 @@ class LabelPropagation:
 
     def _synchronous_propagation(self):
         change = False
-        nodes = list(self._network)
+        nodes = list(self.network)
         random.seed(self._seed)
         random.shuffle(nodes)
         sync_label_map = copy.deepcopy(self._node_labels)
 
         for node in nodes:
-            if len(self._network[node]) < 1:
+            if len(self.network[node]) < 1:
                 continue
 
             new_label = self._maximal_neighbouring_label(node)
@@ -187,7 +187,7 @@ class LabelPropagation:
         return change
 
     def _main(self):
-        self._node_labels = {node: label for label, node in enumerate(self._network)}
+        self._node_labels = {node: label for label, node in enumerate(self.network)}
         change = True
         self.iterations = 0
         while change and self.iterations < self._settings["maximum_iterations"]:
@@ -217,6 +217,7 @@ class LabelPropagation:
             "convergence_factor": convergence_factor,
         }
 
+        start_time = time.time()
         found_communities = {}
         for i in range(self._settings["number_of_partitions"]):
             self._main()
@@ -225,46 +226,48 @@ class LabelPropagation:
         self._settings["weighted"] = True
         self.recursive_steps = 0
         self._recursive(found_communities)
-        return self._network, self._node_labels
+        self.number_of_communities = nx.number_connected_components(self.network)
+        self.method_time = time.time() - start_time
+        return self.network, self._node_labels
 
     def _recursive(self, found_communities):
         if self.recursive_steps >= self._settings["max_recursive_steps"]:
             print("Reached maximum recursive steps")
             return
 
-        for u, v in self._network.edges():
-            self._network[u][v]['weight'] = 0.0
+        for u, v in self.network.edges():
+            self.network[u][v]['weight'] = 0.0
 
-        for node, nbr in self._network.edges():
+        for node, nbr in self.network.edges():
             for i in range(self._settings["number_of_partitions"]):
                 communities = found_communities[i]
                 if communities[node] == communities[nbr]:
-                    if not self._network.has_edge(node, nbr):
-                        self._network.add_edge(node, nbr, weight=0)
-                    self._network[node][nbr]['weight'] += 1
+                    if not self.network.has_edge(node, nbr):
+                        self.network.add_edge(node, nbr, weight=0)
+                    self.network[node][nbr]['weight'] += 1
 
         edges_to_be_removed = []
-        for u, v in self._network.edges():
-            if self._network[u][v]['weight'] < self._settings["threshold"] * self._settings["number_of_partitions"]:
+        for u, v in self.network.edges():
+            if self.network[u][v]['weight'] < self._settings["threshold"] * self._settings["number_of_partitions"]:
                 edges_to_be_removed.append((u, v))
 
-        self._network.remove_edges_from(edges_to_be_removed)
+        self.network.remove_edges_from(edges_to_be_removed)
 
         if self._settings["fcc"]:
-            for _ in range(self._network.number_of_edges()):
-                node = np.random.choice(self._network.nodes())
-                neighbors = [n[1] for n in self._network.edges(node)]
+            for _ in range(self.network.number_of_edges()):
+                node = np.random.choice(self.network.nodes())
+                neighbors = [n[1] for n in self.network.edges(node)]
 
                 if len(neighbors) >= 2:
                     j, k = random.sample(set(neighbors), 2)
 
-                    if not self._network.has_edge(j, k):
-                        self._network.add_edge(j, k, weight=0)
+                    if not self.network.has_edge(j, k):
+                        self.network.add_edge(j, k, weight=0)
 
                         for i in range(self._settings["number_of_partitions"]):
                             communities = found_communities[i]
                             if communities[j] == communities[k]:
-                                self._network[j][k]['weight'] += 1
+                                self.network[j][k]['weight'] += 1
 
         if self._is_block_diagonal():
             return
@@ -280,14 +283,14 @@ class LabelPropagation:
 
     def _is_block_diagonal(self):
         count_faulty_edges = 0
-        for weight in nx.get_edge_attributes(self._network, 'weight').values():
+        for weight in nx.get_edge_attributes(self.network, 'weight').values():
             if self._settings["threshold"] < weight < self._settings["number_of_partitions"]:
                 if self._settings["fcc"]:
                     count_faulty_edges += 1
                 else:
                     return False
 
-        if count_faulty_edges > self._settings["convergence_factor"] * self._network.number_of_edges():
+        if count_faulty_edges > self._settings["convergence_factor"] * self.network.number_of_edges():
             return False
 
         return True
