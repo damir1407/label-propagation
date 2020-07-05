@@ -14,13 +14,14 @@ class LabelPropagation:
             self.network = self._initialize_graph_from_file(file_path)
         else:
             self.network = network
-        self._node_labels = {}
+        self.node_labels = {}
         self._settings = {}
         self._seed = 2
         self.recursive_steps = None
         self.iterations = None
         self.method_time = None
         self.number_of_communities = None
+        self.final_communities = None
 
     def _initialize_graph_from_file(self, file_path):
         new_graph = nx.Graph()
@@ -55,21 +56,21 @@ class LabelPropagation:
         communities = self._get_communities()
         self.number_of_communities = len(communities)
         if len(communities) > 1:
-            result = self._dfs_connectivity(communities)
+            self.final_communities = self._dfs_connectivity(communities)
         else:
-            result = []
-        if len(result) > len(communities):
+            self.final_communities = communities
+        if len(self.final_communities) > len(communities):
             print("Disconnected communities found!")
-            for index, community in enumerate(result):
+            for index, community in enumerate(self.final_communities):
                 for member in community:
-                    self._node_labels[member] = index
+                    self.node_labels[member] = index
 
-        return self.network, self._node_labels
+        return self.network, self.node_labels
 
     def _get_communities(self):
-        unique_community_labels = set(self._node_labels.values())
+        unique_community_labels = set(self.node_labels.values())
         unique_communities_by_label = {value: [] for value in unique_community_labels}
-        for node, label in self._node_labels.items():
+        for node, label in self.node_labels.items():
             unique_communities_by_label[label].append(node)
         return unique_communities_by_label.values()
 
@@ -82,16 +83,16 @@ class LabelPropagation:
         return random.choice(max_labels)
 
     def _retention(self, node, max_labels):
-        if self._node_labels[node] in max_labels:
-            return self._node_labels[node]
+        if self.node_labels[node] in max_labels:
+            return self.node_labels[node]
         return random.choice(max_labels)
 
     def _find_max_labels_in_neighborhood(self, node):
         label_freq = Counter()
         for v in self.network[node]:
-            label_freq.update({self._node_labels[v]: self.network.edges[node, v][self._weight] if self._weight else 1})
+            label_freq.update({self.node_labels[v]: self.network.edges[node, v][self._weight] if self._weight else 1})
         if self._settings["label_ties_resolution"] == "inclusion":
-            label_freq.update({self._node_labels[node]: 1})
+            label_freq.update({self.node_labels[node]: 1})
 
         max_freq = max(label_freq.values())
         return [label for label, freq in label_freq.items() if freq == max_freq]
@@ -134,34 +135,35 @@ class LabelPropagation:
         for node in nodes:
             max_labels = self._find_max_labels_in_neighborhood(node)
 
-            # TODO: Is node label in max_labels?
             if len(max_labels) > 1:
                 if self._settings["convergence_criterium"] == "label-equilibrium":
-                    continue
+                    if self.node_labels[node] in max_labels:
+                        continue
+                    else:
+                        return True
                 elif self._settings["convergence_criterium"] == "strong-community":
                     return True
                 else:
                     raise ValueError("Invalid label equilibrium criteria parameter. Choose between \"label-equilibrium\", \"strong-community\" and \"change\".")
-
-            elif self._node_labels[node] != max_labels[0]:
+            elif self.node_labels[node] != max_labels[0]:
                 return True
         return False
 
     def _asynchronous_propagation(self):
         change = False
         nodes = list(self.network)
-        random.seed(self._seed)
+        # random.seed(self._seed)
         random.shuffle(nodes)
 
         for node in nodes:
             if len(self.network[node]) < 1:
-                # TODO: Add edge to random node
-                continue
+                self.network.add_edge(node, random.choice(nodes))
+                # continue
 
             new_label = self._maximal_neighbouring_label(node)
 
-            if self._node_labels[node] != new_label:
-                self._node_labels[node] = new_label
+            if self.node_labels[node] != new_label:
+                self.node_labels[node] = new_label
                 change = True
 
         return change
@@ -169,9 +171,9 @@ class LabelPropagation:
     def _synchronous_propagation(self):
         change = False
         nodes = list(self.network)
-        random.seed(self._seed)
+        # random.seed(self._seed)
         random.shuffle(nodes)
-        sync_label_map = copy.deepcopy(self._node_labels)
+        sync_label_map = copy.deepcopy(self.node_labels)
 
         for node in nodes:
             if len(self.network[node]) < 1:
@@ -183,11 +185,11 @@ class LabelPropagation:
                 sync_label_map[node] = new_label
                 change = True
 
-        self._node_labels = sync_label_map
+        self.node_labels = sync_label_map
         return change
 
     def _main(self):
-        self._node_labels = {node: label for label, node in enumerate(self.network)}
+        self.node_labels = {node: label for label, node in enumerate(self.network)}
         change = True
         self.iterations = 0
         while change and self.iterations < self._settings["maximum_iterations"]:
@@ -221,14 +223,14 @@ class LabelPropagation:
         found_communities = {}
         for i in range(self._settings["number_of_partitions"]):
             self._main()
-            found_communities[i] = self._node_labels
+            found_communities[i] = self.node_labels
 
         self._settings["weighted"] = True
         self.recursive_steps = 0
         self._recursive(found_communities)
         self.number_of_communities = nx.number_connected_components(self.network)
         self.method_time = time.time() - start_time
-        return self.network, self._node_labels
+        return self.network, self.node_labels
 
     def _recursive(self, found_communities):
         if self.recursive_steps >= self._settings["max_recursive_steps"]:
@@ -275,7 +277,7 @@ class LabelPropagation:
         found_communities = {}
         for i in range(self._settings["number_of_partitions"]):
             self._main()
-            found_communities[i] = self._node_labels
+            found_communities[i] = self.node_labels
 
         self.recursive_steps += 1
         self._recursive(found_communities)

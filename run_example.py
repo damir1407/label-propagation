@@ -4,7 +4,34 @@ from networkx.algorithms.community import label_propagation_communities, asyn_lp
 import time
 import numpy as np
 
+
+def flake_score(network, node_labels):
+    nodes = list(network)
+    count_flake_nodes = 0
+    for node in nodes:
+        ki = len(network[node])
+        same_label = 0
+        for v in network[node]:
+            if node_labels[node] == node_labels[v]:
+                same_label += 1
+
+        if same_label < ki / 2:
+            count_flake_nodes += 1
+
+    return count_flake_nodes / len(nodes)
+
+
+def largest_community_share(network, found_communities):
+    largest_community_index = 0
+    for i, c in enumerate(found_communities):
+        if len(c) > len(found_communities[largest_community_index]):
+            largest_community_index = i
+
+    return len(found_communities[largest_community_index]) / len(list(network))
+
+
 for file in ["data/arenas-pgp/out.arenas-pgp", "data/douban/out.douban", "data/com-youtube/out.com-youtube"]:
+    break
     # start_time = time.time()
 
     # print("NUMBER OF NODES:", len(G.nodes))
@@ -14,6 +41,7 @@ for file in ["data/arenas-pgp/out.arenas-pgp", "data/douban/out.douban", "data/c
     lpa_time = []
     lpa_iterations = []
     lpa_communities = []
+    lpa_modularity = []
     cc_time = []
     cc_iterations = []
     cc_communities = []
@@ -28,6 +56,7 @@ for file in ["data/arenas-pgp/out.arenas-pgp", "data/douban/out.douban", "data/c
         lpa_time.append(lp.method_time)
         lpa_iterations.append(lp.iterations)
         lpa_communities.append(lp.number_of_communities)
+        lpa_modularity.append(nx.algorithms.community.modularity(lp.network, lp.final_communities))
 
         # lp = LabelPropagation(network=G)
         # _, _ = lp.consensus_clustering(label_ties_resolution="retention", convergence_criterium="change",
@@ -54,6 +83,9 @@ for file in ["data/arenas-pgp/out.arenas-pgp", "data/douban/out.douban", "data/c
     print("LPA COMMUNITIES", lpa_communities)
     print("LPA AVG COMMUNITIES", np.mean(lpa_communities))
     print("LPA STD COMMUNITIES", np.std(lpa_communities))
+    print("LPA MODULARITY", lpa_modularity)
+    print("LPA AVG MODULARITY", np.mean(lpa_modularity))
+    print("LPA STD MODULARITY", np.std(lpa_modularity))
     # print("CC TIME", cc_time)
     # print("CC MEAN TIME", np.mean(cc_time))
     # print("CC STD TIME", np.std(cc_time))
@@ -75,7 +107,8 @@ for file in ["data/arenas-pgp/out.arenas-pgp", "data/douban/out.douban", "data/c
     print("==============================================")
     print()
 
-no_of_nodes = [(100, 0.05), (1000, 0.005), (10000, 0.0005), (100000, 0.00005), (1000000, 0.000005)]
+d = 10
+no_of_nodes = [100, 1000, 10000, 100000, 1000000]
 for n in no_of_nodes:
     # start_time = time.time()
 
@@ -86,23 +119,33 @@ for n in no_of_nodes:
     lpa_time = []
     lpa_iterations = []
     lpa_communities = []
+    lpa_modularity = []
+    lpa_flake = []
+    lpa_share = []
     cc_time = []
     cc_iterations = []
     cc_communities = []
+    cc_modularity = []
     fcc_time = []
     fcc_iterations = []
     fcc_communities = []
-    print("NUMBER OF NODES:", n[0])
+    fcc_modularity = []
+    print("NUMBER OF NODES:", n)
+    m = int((n*d)/2)
+    print("NUMBER OF EDGES:", m)
 
     for i in range(0, 10):
-        G = nx.fast_gnp_random_graph(n[0], n[1])
+        G = nx.dense_gnm_random_graph(n, m)
         # G = nx.LFR_benchmark_graph()
         lp = LabelPropagation(network=G)
-        _, _ = lp.start(label_ties_resolution="retention", convergence_criterium="change", order="asynchronous",
+        _, _ = lp.start(label_ties_resolution="random", convergence_criterium="strong-community", order="asynchronous",
                         weighted=False)
         lpa_time.append(lp.method_time)
         lpa_iterations.append(lp.iterations)
         lpa_communities.append(lp.number_of_communities)
+        lpa_modularity.append(nx.algorithms.community.modularity(G, list(lp.final_communities)))
+        lpa_flake.append(flake_score(G, lp.node_labels))
+        lpa_share.append(largest_community_share(G, list(lp.final_communities)))
 
         # lp = LabelPropagation(network=G)
         # _, _ = lp.consensus_clustering(label_ties_resolution="retention", convergence_criterium="change",
@@ -129,6 +172,15 @@ for n in no_of_nodes:
     print("LPA COMMUNITIES", lpa_communities)
     print("LPA AVG COMMUNITIES", np.mean(lpa_communities))
     print("LPA STD COMMUNITIES", np.std(lpa_communities))
+    print("LPA MODULARITY", lpa_modularity)
+    print("LPA AVG MODULARITY", np.mean(lpa_modularity))
+    print("LPA STD MODULARITY", np.std(lpa_modularity))
+    print("LPA FLAKE", lpa_flake)
+    print("LPA AVG FLAKE", np.mean(lpa_flake))
+    print("LPA STD FLAKE", np.std(lpa_flake))
+    print("LPA LARGEST COMMUNITY SHARE", lpa_share)
+    print("LPA AVG LARGEST COMMUNITY SHARE", np.mean(lpa_share))
+    print("LPA STD LARGEST COMMUNITY SHARE", np.std(lpa_share))
     # print("CC TIME", cc_time)
     # print("CC MEAN TIME", np.mean(cc_time))
     # print("CC STD TIME", np.std(cc_time))
@@ -149,6 +201,7 @@ for n in no_of_nodes:
     # print("FCC STD COMMUNITIES", np.std(fcc_communities))
     print("==============================================")
     print()
+
 
 
     # start_time = time.time()
