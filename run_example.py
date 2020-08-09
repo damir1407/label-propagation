@@ -82,7 +82,7 @@ d = 10
 no_of_nodes = [100, 1000, 10000, 100000, 1000000]
 # no_of_nodes = [100]
 for n in no_of_nodes:
-
+    break
     lpa_time = []
     lpa_iterations = []
     lpa_communities = []
@@ -214,26 +214,13 @@ for n in no_of_nodes:
         lp = LabelPropagation(network=G)
         _, _ = lp.start(label_ties_resolution="retention", convergence_criterium="change", order="asynchronous",
                         weighted=False)
-        print("Algorithm ready", i)
-        start_time = time.time()
         lpa_time.append(lp.method_time)
-        print("LPA TIME:", time.time() - start_time)
-        start_time = time.time()
         lpa_iterations.append(lp.iterations)
-        print("LPA ITERATIONS:", time.time() - start_time)
-        start_time = time.time()
         lpa_communities.append(lp.number_of_communities)
-        print("LPA COMMUNITIES:", time.time() - start_time)
-        start_time = time.time()
         lpa_flake.append(flake_score(G, lp.node_labels))
-        print("LPA FLAKE:", time.time() - start_time)
-        start_time = time.time()
         mod, share = pquality_summary(G, list(lp.final_communities))
         lpa_modularity.append(mod)
         lpa_share.append(share)
-        print("LPA MOD SHARE:", time.time() - start_time)
-        print("Metrics ready", i)
-
         # lp = LabelPropagation(network=G)
         # _, _ = lp.consensus_clustering(label_ties_resolution="retention", convergence_criterium="change",
         #                                order="asynchronous", threshold=0.5, number_of_partitions=10, weighted=False,
@@ -290,69 +277,83 @@ for n in no_of_nodes:
     print()
 
 for n in no_of_nodes:
-
+    break
     lpa_time = []
     lpa_iterations = []
     lpa_communities = []
     lpa_modularity = []
     lpa_flake = []
     lpa_share = []
+    lpa_nmi = []
     cc_time = []
     cc_iterations = []
     cc_communities = []
     cc_modularity = []
+    cc_flake = []
+    cc_share = []
+    cc_nmi = []
     fcc_time = []
     fcc_iterations = []
     fcc_communities = []
     fcc_modularity = []
+    fcc_flake = []
+    fcc_share = []
+    fcc_nmi = []
     print("NUMBER OF NODES:", n)
     m = int(d / 2)
     print("NUMBER OF EDGES FOR EACH NODE:", m)
 
     for i in range(0, 10):
-        params = {"n": n, "tau1": 3, "tau2": 2, "mu": 0.5, "average_degree": d, "max_degree": d}
+        # params = {"n": 100, "tau1": 3, "tau2": 2, "mu": 0.15, "average_degree": 10, "max_degree": 20,
+        #           "min_community": 20, "max_community": 50}
+        # params = {"n": 1000, "tau1": 3, "tau2": 2, "mu": 0.35, "average_degree": 10, "max_degree": 50,
+        #           "min_community": 20, "max_community": 50}
+        # params = {"n": 10000, "tau1": 3, "tau2": 2, "mu": 0.4, "average_degree": 10, "max_degree": 50,
+        #           "min_community": 20, "max_community": 50}
+        # params = {"n": 100000, "tau1": 3, "tau2": 2, "mu": 0.45, "average_degree": 10, "max_degree": 50,
+        #           "min_community": 20, "max_community": 50}
+        params = {"n": 1000000, "tau1": 3, "tau2": 2, "mu": 0.5, "average_degree": 10, "max_degree": 50,
+                  "min_community": 20, "max_community": 50}
+
         start_time = time.time()
         G = nx.LFR_benchmark_graph(params["n"], params["tau1"], params["tau2"], params["mu"],
-                                min_degree=params["average_degree"],
+                                average_degree=params["average_degree"],
                                 max_degree=params["max_degree"],
+                                min_community=params["min_community"],
+                                max_community=params["max_community"],
                                 max_iters=5000,
                                 )
-        communities = {frozenset(G.nodes[v]['community']) for v in G}
-        # print(len(communities))
-        communities = [list(c) for c in communities]
-        # print(len(communities))
-        # print(communities)
-        print("Graph ready", i, time.time() - start_time)
+        print("graph ready", time.time() - start_time)
+        start_time = time.time()
         lp = LabelPropagation(network=G)
         _, _ = lp.start(label_ties_resolution="retention", convergence_criterium="change", order="asynchronous",
                         weighted=False)
-        # print("Algorithm ready", i)
-        # print(lp.final_communities)
-        # print(normalized_mutual_info_score(communities, list(lp.final_communities)))
-        start_time = time.time()
+        print("lp ready", time.time() - start_time)
+
+        lfr_communities = []
+        lp_communities = []
+        communities = []
+        for v in G:
+            lp_communities.append(lp.node_labels[v])
+            if frozenset(G.nodes[v]['community']) in communities:
+                lfr_communities.append(communities.index(frozenset(G.nodes[v]['community'])))
+            else:
+                communities.append(frozenset(G.nodes[v]['community']))
+                lfr_communities.append(communities.index(frozenset(G.nodes[v]['community'])))
+        print(len(communities))
+        nmi = normalized_mutual_info_score(lfr_communities, lp_communities)
+        print(nmi)
         lpa_time.append(lp.method_time)
-        print("LPA TIME:", time.time() - start_time)
-        start_time = time.time()
         lpa_iterations.append(lp.iterations)
-        print("LPA ITERATIONS:", time.time() - start_time)
-        start_time = time.time()
         lpa_communities.append(lp.number_of_communities)
-        print("LPA COMMUNITIES:", time.time() - start_time)
-        start_time = time.time()
+        lpa_modularity.append(nx.algorithms.community.modularity(G, lp.final_communities))
         lpa_flake.append(flake_score(G, lp.node_labels))
-        print("LPA FLAKE:", time.time() - start_time)
-        # start_time = time.time()
         # mod, share = pquality_summary(G, list(lp.final_communities))
         # lpa_modularity.append(mod)
         # lpa_share.append(share)
-        # print("LPA MOD SHARE:", time.time() - start_time)
-        start_time = time.time()
         lpa_share.append(largest_community_share(G, list(lp.final_communities)))
-        print("LPA SHARE:", time.time() - start_time)
-        start_time = time.time()
-        lpa_modularity.append(nx.algorithms.community.modularity(G, lp.final_communities))
-        print("LPA BUILT IN MOD:", time.time() - start_time)
-        print("Metrics ready", i)
+        lpa_nmi.append(nmi)
+
     print("LPA TIME", lpa_time)
     print("LPA MEAN TIME", np.mean(lpa_time))
     print("LPA STD TIME", np.std(lpa_time))
@@ -371,6 +372,9 @@ for n in no_of_nodes:
     print("LPA LARGEST COMMUNITY SHARE", lpa_share)
     print("LPA AVG LARGEST COMMUNITY SHARE", np.mean(lpa_share))
     print("LPA STD LARGEST COMMUNITY SHARE", np.std(lpa_share))
+    print("LPA NMI", lpa_nmi)
+    print("LPA AVG NMI", np.mean(lpa_nmi))
+    print("LPA STD NMI", np.std(lpa_nmi))
     # print("CC TIME", cc_time)
     # print("CC MEAN TIME", np.mean(cc_time))
     # print("CC STD TIME", np.std(cc_time))
