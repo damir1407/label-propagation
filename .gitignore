@@ -4,3 +4,4 @@ __pycache__/
 data/
 docs/
 analysis.py
+twitter.py

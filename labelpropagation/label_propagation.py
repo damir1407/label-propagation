@@ -19,6 +19,7 @@ class LabelPropagation:
         self._seed = 2
         self.recursive_steps = None
         self.iterations = None
+        self.cc_iterations = None
         self.method_time = None
         self.number_of_communities = None
         self.final_communities = None
@@ -221,14 +222,22 @@ class LabelPropagation:
 
         start_time = time.time()
         found_communities = {}
+        self.cc_iterations = 0
         for i in range(self._settings["number_of_partitions"]):
             self._main()
+            self.cc_iterations += self.iterations
             found_communities[i] = self.node_labels
 
         self._settings["weighted"] = True
         self.recursive_steps = 0
         self._recursive(found_communities)
         self.number_of_communities = nx.number_connected_components(self.network)
+        self.final_communities = []
+        for i, c in enumerate(nx.connected_components(self.network)):
+            comm = list(c)
+            self.final_communities.append(comm)
+            for v in comm:
+                self.node_labels[v] = i
         self.method_time = time.time() - start_time
         return self.network, self.node_labels
 
@@ -277,6 +286,7 @@ class LabelPropagation:
         found_communities = {}
         for i in range(self._settings["number_of_partitions"]):
             self._main()
+            self.cc_iterations += self.iterations
             found_communities[i] = self.node_labels
 
         self.recursive_steps += 1
